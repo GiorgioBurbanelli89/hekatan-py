@@ -640,7 +640,19 @@ namespace Calcpad.Core.Python
         private object EvalIndex(IndexExpr ix, PyScope scope)
         {
             var obj = Eval(ix.Target, scope);
-            if (obj is PyNdArray nd) return nd.Get(NdSpecs(ix.Index, scope));   // A[i], A[i,j], A[i,:]
+            if (obj is PyNdArray nd)
+            {
+                // indexado avanzado: A[np.ix_(r,c)] (submatriz) y A[intarray] (gather)
+                if (!(ix.Index is SliceExpr) && !(ix.Index is TupleLit))
+                {
+                    var iv = Eval(ix.Index, scope);
+                    if (iv is PyIxGrid g) return nd.Submatrix(g.Rows, g.Cols);
+                    if (iv is PyNdArray ia && ia.Ndim == 1 && ia.IsInt)
+                    { var idxi = new int[ia.Data.Length]; for (int k = 0; k < idxi.Length; k++) idxi[k] = (int)Math.Round(ia.Data[k]); return nd.Gather(idxi); }
+                    return nd.Get(new List<NdSpec> { new NdSpec { Slice = false, Idx = PyOps.ToLong(iv) } });
+                }
+                return nd.Get(NdSpecs(ix.Index, scope));   // A[i], A[i,j], A[i,:]
+            }
             if (ix.Index is SliceExpr sl) return GetSlice(obj, sl, scope);
             var idx = Eval(ix.Index, scope);
             return GetItem(obj, idx);

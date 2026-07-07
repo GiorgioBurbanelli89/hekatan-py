@@ -30,6 +30,13 @@ namespace Calcpad.Core.Python
     }
 
     /// <summary>Array N-dimensional (1D/2D) en row-major, estilo numpy.ndarray.</summary>
+    // Resultado de np.ix_(rows, cols): usado en A[np.ix_(r,c)] para armar una submatriz.
+    public sealed class PyIxGrid
+    {
+        public int[] Rows; public int[] Cols;
+        public PyIxGrid(int[] r, int[] c) { Rows = r; Cols = c; }
+    }
+
     public sealed class PyNdArray
     {
         public double[] Data;   // row-major
@@ -100,6 +107,25 @@ namespace Calcpad.Core.Python
             var d = new double[Rows];
             for (int i = 0; i < Rows; i++) d[i] = Data[i * Cols + c];
             return new PyNdArray(d, new[] { Rows }, IsInt);
+        }
+        // ── indexado avanzado: A[intarray] (gather 1D) y A[np.ix_(r,c)] (submatriz 2D) ──
+        public PyNdArray Gather(int[] idx)
+        {
+            var d = new double[idx.Length];
+            int n = Shape[0];
+            for (int k = 0; k < idx.Length; k++) d[k] = Data[Norm(idx[k], n)];
+            return new PyNdArray(d, new[] { idx.Length }, IsInt);
+        }
+        public PyNdArray Submatrix(int[] rows, int[] cols)
+        {
+            int R = rows.Length, C = cols.Length;
+            var d = new double[R * C];
+            for (int i = 0; i < R; i++)
+            {
+                int ri = Norm(rows[i], Rows);
+                for (int j = 0; j < C; j++) d[i * C + j] = Data[ri * Cols + Norm(cols[j], Cols)];
+            }
+            return new PyNdArray(d, new[] { R, C }, IsInt);
         }
         private PyNdArray SliceVec(NdSpec sp)
         {
@@ -282,6 +308,10 @@ namespace Calcpad.Core.Python
             Reg("diff", (a, kw) => { var x = AsArr(a[0]); int n = x.Size - 1; var d = new double[n < 0 ? 0 : n]; for (int i = 0; i < n; i++) d[i] = x.Data[i + 1] - x.Data[i]; return new PyNdArray(d, new[] { d.Length }); });
             Reg("isnan", (a, kw) => UFunc(a[0], v => double.IsNaN(v) ? 1.0 : 0.0));
             Reg("unravel_index", (a, kw) => Unravel(a));
+            // conjuntos e indexado avanzado (para ensamble FEM: free = setdiff1d(...), K[np.ix_(free,free)])
+            Reg("setdiff1d", (a, kw) => Setdiff1d(AsArr(a[0]), AsArr(a[1])));
+            Reg("unique", (a, kw) => { var set = new SortedSet<double>(AsArr(a[0]).Data); var d = new double[set.Count]; int k = 0; foreach (var x in set) d[k++] = x; return new PyNdArray(d, new[] { d.Length }, AsArr(a[0]).IsInt); });
+            Reg("ix_", (a, kw) => new PyIxGrid(ToIntArr(AsArr(a[0])), ToIntArr(AsArr(a[1]))));
 
             // submódulo linalg
             var linalg = new PyModule("numpy.linalg");
@@ -289,8 +319,27 @@ namespace Calcpad.Core.Python
             linalg.Attrs["norm"] = new PyBuiltin("norm", (a, kw) => Norm(AsArr(a[0])));
             linalg.Attrs["inv"] = new PyBuiltin("inv", (a, kw) => Inv(AsArr(a[0])));
             linalg.Attrs["det"] = new PyBuiltin("det", (a, kw) => Det(AsArr(a[0])));
+            linalg.Attrs["eigh"] = new PyBuiltin("eigh", (a, kw) => Eigh(AsArr(a[0])));
+            linalg.Attrs["eigvalsh"] = new PyBuiltin("eigvalsh", (a, kw) => Eigvalsh(AsArr(a[0])));
+            linalg.Attrs["eig"] = new PyBuiltin("eig", (a, kw) => Eigh(AsArr(a[0])));          // simétrica: eig ≡ eigh
+            linalg.Attrs["eigvals"] = new PyBuiltin("eigvals", (a, kw) => Eigvalsh(AsArr(a[0])));
             m.Attrs["linalg"] = linalg;
             return m;
+        }
+
+        private static int[] ToIntArr(PyNdArray a)
+        {
+            var r = new int[a.Data.Length];
+            for (int i = 0; i < r.Length; i++) r[i] = (int)Math.Round(a.Data[i]);
+            return r;
+        }
+        private static PyNdArray Setdiff1d(PyNdArray a, PyNdArray b)
+        {
+            var setB = new HashSet<double>(b.Data);
+            var diff = new SortedSet<double>();
+            foreach (var x in a.Data) if (!setB.Contains(x)) diff.Add(x);
+            var d = new double[diff.Count]; int k = 0; foreach (var x in diff) d[k++] = x;
+            return new PyNdArray(d, new[] { d.Length }, true);   // índices → entero
         }
 
         // ── atributos/métodos de una PyNdArray (lo llama el evaluador en GetAttr) ──
@@ -424,6 +473,37 @@ namespace Calcpad.Core.Python
             }
             x ??= GaussSolve(n, (double[])A.Data.Clone(), (double[])b.Data.Clone());
             return new PyNdArray(x, new[] { n });
+        }
+
+        // Autovalores/autovectores de matriz simétrica (Eigen SelfAdjointEigenSolver).
+        // Núcleo para np.linalg.eigh / eigvalsh (base del análisis modal).
+        private static (double[] vals, double[] vecs, int n) EighCore(PyNdArray A)
+        {
+            if (A.Ndim != 2 || A.Rows != A.Cols)
+                throw new PyRuntimeError("ValueError", "eigh: A debe ser cuadrada");
+            int n = A.Rows;
+            if (!Calcpad.Core.EigenInterop.IsAvailable())
+                throw new PyRuntimeError("LinAlgError", "eigh: eigen_solver no disponible");
+            var Adata = (double[])A.Data.Clone();
+            var vals = new double[n];
+            var vecs = new double[n * n];
+            int rc = Calcpad.Core.EigenInterop.dense_eigenvalues(n, Adata, vals, vecs);
+            if (rc != 0) throw new PyRuntimeError("LinAlgError", "eigh: fallo del solver (rc=" + rc + ")");
+            return (vals, vecs, n);
+        }
+
+        // np.linalg.eigh(A) → (w, v) con w ascendente y v[:,i] = autovector de w[i].
+        public static object Eigh(PyNdArray A)
+        {
+            var (vals, vecs, n) = EighCore(A);
+            return new PyTuple(new object[] { new PyNdArray(vals, new[] { n }), new PyNdArray(vecs, new[] { n, n }) });
+        }
+
+        // np.linalg.eigvalsh(A) → solo los autovalores (ascendente).
+        public static object Eigvalsh(PyNdArray A)
+        {
+            var (vals, _, n) = EighCore(A);
+            return new PyNdArray(vals, new[] { n });
         }
 
         // Gauss con pivoteo parcial (fallback si OpenBLAS no está disponible).
