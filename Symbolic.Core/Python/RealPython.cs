@@ -78,7 +78,12 @@ namespace Calcpad.Core.Python
             string tempFile = Path.Combine(Path.GetTempPath(), "calcpad_py_" + Guid.NewGuid().ToString("N") + ".py");
             try
             {
-                File.WriteAllText(tempFile, code, new UTF8Encoding(false));
+                // El .py corre desde un temp, así que os.path.dirname(__file__) apuntaría al temp.
+                // Fijamos __file__ a la carpeta REAL del script para que open(join(dirname(__file__),...)) resuelva.
+                string preamble = "";
+                if (!string.IsNullOrEmpty(ScriptDirectory) && Directory.Exists(ScriptDirectory))
+                    preamble = "__file__ = r\"\"\"" + Path.Combine(ScriptDirectory, "__main__.py") + "\"\"\"\n";
+                File.WriteAllText(tempFile, preamble + code, new UTF8Encoding(false));
                 var psi = new ProcessStartInfo
                 {
                     FileName = Effective,
@@ -128,7 +133,12 @@ namespace Calcpad.Core.Python
             string tempFile = Path.Combine(Path.GetTempPath(), "calcpad_py_" + Guid.NewGuid().ToString("N") + ".py");
             try
             {
-                File.WriteAllText(tempFile, code, new UTF8Encoding(false));
+                // El .py corre desde un temp, así que os.path.dirname(__file__) apuntaría al temp.
+                // Fijamos __file__ a la carpeta REAL del script para que open(join(dirname(__file__),...)) resuelva.
+                string preamble = "";
+                if (!string.IsNullOrEmpty(ScriptDirectory) && Directory.Exists(ScriptDirectory))
+                    preamble = "__file__ = r\"\"\"" + Path.Combine(ScriptDirectory, "__main__.py") + "\"\"\"\n";
+                File.WriteAllText(tempFile, preamble + code, new UTF8Encoding(false));
                 var psi = new ProcessStartInfo
                 {
                     FileName = Effective,
