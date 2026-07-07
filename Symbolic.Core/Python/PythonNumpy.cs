@@ -312,6 +312,10 @@ namespace Calcpad.Core.Python
             Reg("setdiff1d", (a, kw) => Setdiff1d(AsArr(a[0]), AsArr(a[1])));
             Reg("unique", (a, kw) => { var set = new SortedSet<double>(AsArr(a[0]).Data); var d = new double[set.Count]; int k = 0; foreach (var x in set) d[k++] = x; return new PyNdArray(d, new[] { d.Length }, AsArr(a[0]).IsInt); });
             Reg("ix_", (a, kw) => new PyIxGrid(ToIntArr(AsArr(a[0])), ToIntArr(AsArr(a[1]))));
+            // I/O de texto: cargar/guardar matrices numéricas (registros sísmicos, CSV, etc.)
+            Reg("loadtxt", (a, kw) => Loadtxt(a, kw));
+            Reg("genfromtxt", (a, kw) => Loadtxt(a, kw));
+            Reg("savetxt", (a, kw) => { Savetxt(a, kw); return null; });
 
             // submódulo linalg
             var linalg = new PyModule("numpy.linalg");
@@ -332,6 +336,73 @@ namespace Calcpad.Core.Python
             var r = new int[a.Data.Length];
             for (int i = 0; i < r.Length; i++) r[i] = (int)Math.Round(a.Data[i]);
             return r;
+        }
+        private static string KwStr(PyDict kw, string key)
+        {
+            if (kw != null && kw.TryGet(key, out var v) && v is string s) return s;
+            return null;
+        }
+        private static object Loadtxt(object[] a, PyDict kw)
+        {
+            string path = a[0] as string ?? a[0]?.ToString();
+            var dl = KwStr(kw, "delimiter");
+            char[] sep = !string.IsNullOrEmpty(dl) ? dl.ToCharArray() : new[] { ' ', '\t', ',', ';' };
+            var comments = KwStr(kw, "comments") ?? "#";
+            var lines = System.IO.File.ReadAllLines(path);
+            var rows = new List<double[]>(); int ncols = -1;
+            foreach (var line in lines)
+            {
+                var t = line.Trim();
+                if (t.Length == 0 || t.StartsWith(comments)) continue;
+                var toks = t.Split(sep, StringSplitOptions.RemoveEmptyEntries);
+                var row = new double[toks.Length]; bool ok = true;
+                for (int k = 0; k < toks.Length; k++)
+                    if (!double.TryParse(toks[k], NumberStyles.Any, CultureInfo.InvariantCulture, out row[k])) { ok = false; break; }
+                if (!ok) continue;
+                if (ncols < 0) ncols = row.Length;
+                if (row.Length == ncols) rows.Add(row);
+            }
+            if (rows.Count == 0) return new PyNdArray(new double[0], new[] { 0 });
+            if (ncols == 1) { var d = new double[rows.Count]; for (int i = 0; i < rows.Count; i++) d[i] = rows[i][0]; return new PyNdArray(d, new[] { rows.Count }); }
+            if (rows.Count == 1) return new PyNdArray(rows[0], new[] { ncols });
+            var data = new double[rows.Count * ncols];
+            for (int i = 0; i < rows.Count; i++) for (int j = 0; j < ncols; j++) data[i * ncols + j] = rows[i][j];
+            return new PyNdArray(data, new[] { rows.Count, ncols });
+        }
+        private static string FmtNum(double v, string fmt)
+        {
+            if (string.IsNullOrEmpty(fmt)) return v.ToString("G", CultureInfo.InvariantCulture);
+            // traduce fmt estilo numpy "%.6f"/"%.4e"/"%g" a .NET
+            var m = System.Text.RegularExpressions.Regex.Match(fmt, @"%\.?(\d+)?([feEgG])");
+            if (m.Success)
+            {
+                int prec = m.Groups[1].Success ? int.Parse(m.Groups[1].Value) : 6;
+                char c = m.Groups[2].Value[0];
+                string net = c == 'f' ? "F" + prec : (c == 'e' || c == 'E') ? "E" + prec : "G";
+                return v.ToString(net, CultureInfo.InvariantCulture);
+            }
+            return v.ToString("G", CultureInfo.InvariantCulture);
+        }
+        private static void Savetxt(object[] a, PyDict kw)
+        {
+            string path = a[0] as string ?? a[0]?.ToString();
+            var arr = AsArr(a[1]);
+            string delim = KwStr(kw, "delimiter") ?? " ";
+            string fmt = KwStr(kw, "fmt");
+            int rows = arr.Ndim == 1 ? arr.Size : arr.Rows;
+            int cols = arr.Ndim == 1 ? 1 : arr.Cols;
+            var sb = new StringBuilder();
+            for (int i = 0; i < rows; i++)
+            {
+                for (int j = 0; j < cols; j++)
+                {
+                    if (j > 0) sb.Append(delim);
+                    double val = arr.Ndim == 1 ? arr.Data[i] : arr.Data[i * arr.Cols + j];
+                    sb.Append(FmtNum(val, fmt));
+                }
+                sb.Append('\n');
+            }
+            System.IO.File.WriteAllText(path, sb.ToString());
         }
         private static PyNdArray Setdiff1d(PyNdArray a, PyNdArray b)
         {
