@@ -13,7 +13,7 @@ def propiedades(b, h):
     return A, I, S
 
 # Lambda
-flecha = lambda q, L, E, I: 5 * q * L**4 / (384 * E * I)
+flecha = lambda q, L, E, I: 5 * q * L**4 / (384 * E * I)  # hide
 
 # %% Uso
 A, I, S = propiedades(300, 500)

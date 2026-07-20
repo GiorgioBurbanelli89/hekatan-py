@@ -23,6 +23,6 @@ S = viga.modulo()
 print(f"Sección {viga.b}x{viga.h}: A={A:.0f}  I={I:.3e}  S={S:.3e}")
 
 # Lista de objetos + comprensión
-secciones = [Seccion(b, 400) for b in [200, 250, 300, 350]]
+secciones = [Seccion(b, 400) for b in [200, 250, 300, 350]]  # hide
 areas = [s.area() for s in secciones]
 mayor = max(areas)

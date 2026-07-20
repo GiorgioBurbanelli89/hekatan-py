@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-#" numpy EMBEBIDO en Calcpad Suite Py
+#" numpy EMBEBIDO en Hekatan Py
 #' Este script usa numpy ESTANDAR (import numpy as np). Lo corre el motor C#
 #' embebido (sin Python externo): array, @, .T, linalg.solve van a OpenBLAS.
 #' El MISMO archivo corre igual en IDLE/VS Code con numpy real.

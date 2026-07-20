@@ -1,5 +1,5 @@
 # %% Variables y aritmética
-# Calcpad Suite Py — el motor Python nativo en C# muestra cada asignación
+# Hekatan Py — el motor Python nativo en C# muestra cada asignación
 # como una línea de hoja de cálculo: nombre = valor.
 
 # Datos de entrada
