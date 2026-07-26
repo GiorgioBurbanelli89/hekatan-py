@@ -1,5 +1,5 @@
 // =============================================================================
-// Calcpad Suite Py — Embed NATIVO del solver OpenSees (OpenSeesRT.dll) vía Tcl
+// Hekatan Python3 — Embed NATIVO del solver OpenSees (OpenSeesRT.dll) vía Tcl
 // =============================================================================
 //   OpenSeesRT.dll (xara) es una extensión Tcl con el motor OpenSees C++
 //   (MKL Pardiso + JIT GEMM, multi-thread). Se maneja por la C-API de Tcl 8.6:

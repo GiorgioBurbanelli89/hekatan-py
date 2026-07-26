@@ -1,5 +1,5 @@
 // =============================================================================
-// Calcpad Suite Py — Operaciones sobre valores Python (aritmética, comparación,
+// Hekatan Python3 — Operaciones sobre valores Python (aritmética, comparación,
 // igualdad, truthiness, str/repr, formato).
 // =============================================================================
 using System;

@@ -1,5 +1,5 @@
 // =============================================================================
-// Calcpad Suite Py — Selector de ENTORNOS de Python (venv / conda / sistema)
+// Hekatan Python3 — Selector de ENTORNOS de Python (venv / conda / sistema)
 // =============================================================================
 //   Patrón estándar de Python: las librerías (numpy, scipy, matplotlib) NO se
 //   instalan globalmente, sino dentro de un *entorno* (carpeta aislada con su
@@ -12,7 +12,7 @@
 //     • INSTALA numpy/scipy/matplotlib en el entorno activo (pip), sin tocar el
 //       Python del sistema.
 //   La selección y los entornos agregados se PERSISTEN en
-//   %LOCALAPPDATA%\CalcpadSuitePy\pyenv.json.
+//   %LOCALAPPDATA%\HekatanPython3\pyenv.json.
 // =============================================================================
 using System;
 using System.Collections.Generic;
@@ -57,7 +57,7 @@ namespace Calcpad.Core.Python
 
         private static string ConfigDir =>
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                         "CalcpadSuitePy");
+                         "HekatanPython3");
         private static string ConfigFile => Path.Combine(ConfigDir, "pyenv.json");
 
         /// <summary>python.exe activo (o null = usar "python" del PATH por defecto).</summary>

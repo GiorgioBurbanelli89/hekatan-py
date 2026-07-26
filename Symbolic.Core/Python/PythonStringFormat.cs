@@ -1,5 +1,5 @@
 // =============================================================================
-// Calcpad Suite Py — Formato de strings estilo Python
+// Hekatan Python3 — Formato de strings estilo Python
 // =============================================================================
 //   - Format spec mini-lenguaje: [[fill]align][sign][#][0][width][,][.prec][type]
 //     usado por f-strings ({x:.3f}) y por str.format / format().

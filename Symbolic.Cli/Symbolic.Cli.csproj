@@ -6,12 +6,12 @@
     <AnalysisLevel>latest</AnalysisLevel>
     <RootNamespace>Calcpad.Cli</RootNamespace>
     <Version>1.0.0</Version>
-    <Authors>Giorgio Burbanelli (Calcpad Suite Py fork) — original: Nedelcho Ganchovski</Authors>
+    <Authors>Giorgio Burbanelli (Hekatan Python3 fork) — original: Nedelcho Ganchovski</Authors>
     <Company>Hekatan</Company>
-    <PackageId>CalcpadSuitePyCli</PackageId>
-    <Product>Calcpad Suite Py CLI</Product>
-    <AssemblyName>CalcpadSuitePyCli</AssemblyName>
-    <AssemblyTitle>Calcpad Suite Py CLI — Python-syntax to HTML/PDF</AssemblyTitle>
+    <PackageId>HekatanPython3Cli</PackageId>
+    <Product>Hekatan Python3 CLI</Product>
+    <AssemblyName>HekatanPython3Cli</AssemblyName>
+    <AssemblyTitle>Hekatan Python3 CLI — Python-syntax to HTML/PDF</AssemblyTitle>
     <StartupObject>Calcpad.Cli.Program</StartupObject>
   </PropertyGroup>
 

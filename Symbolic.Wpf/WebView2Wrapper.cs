@@ -311,9 +311,9 @@ EndFragment:0000000004";
             settings.ColorMode = CoreWebView2PrintColorMode.Color;
             settings.Duplex = CoreWebView2PrintDuplex.OneSided;
             settings.MediaSize = CoreWebView2PrintMediaSize.Default;
-            settings.HeaderTitle = "Created with Calcpad Suite Py";
+            settings.HeaderTitle = "Created with Hekatan Python3";
             settings.FooterUri = "";
-            settings.PrinterName = "Calcpad Suite Py";
+            settings.PrinterName = "Hekatan Python3";
             return settings;
         }
     }

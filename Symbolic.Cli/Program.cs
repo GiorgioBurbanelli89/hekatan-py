@@ -298,14 +298,14 @@ namespace Calcpad.Cli
             if (OperatingSystem.IsWindows())
                 fileName = fileName.ToLower();
             
-            // Calcpad Suite Py es Python-only: SÓLO acepta .py. Cualquier otra extensión es error.
+            // Hekatan Python3 es Python-only: SÓLO acepta .py. Cualquier otra extensión es error.
             int extLen = 3; // ".py"
             int i = fileName.IndexOf(".py ", StringComparison.OrdinalIgnoreCase);
             if (i < 0 && fileName.EndsWith(".py", StringComparison.OrdinalIgnoreCase))
                 i = fileName.Length - 3;
             if (i < 0)
             {
-                WriteErrorAndWait("Calcpad Suite Py solo procesa scripts Python (.py). Recibido: " + fileName);
+                WriteErrorAndWait("Hekatan Python3 solo procesa scripts Python (.py). Recibido: " + fileName);
                 return true;
             }
             i += extLen;
@@ -362,7 +362,7 @@ namespace Calcpad.Cli
                 fileName = absFileName;
                 outFile = absOutFile;
 
-                // Calcpad Suite Py: solo Python. Leer el archivo directamente.
+                // Hekatan Python3: solo Python. Leer el archivo directamente.
                 string unwrappedCode = File.ReadAllText(fileName);
                 string htmlResult;
                 Converter converter = new(isSilent);

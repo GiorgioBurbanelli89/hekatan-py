@@ -1,5 +1,5 @@
 // =============================================================================
-// Calcpad Suite Py — Puente al intérprete python real (subprocess)
+// Hekatan Python3 — Puente al intérprete python real (subprocess)
 // =============================================================================
 //   Ejecuta un script en el `python` del sistema cuando el motor nativo C# no
 //   alcanza (numpy, sympy, matplotlib, imports no nativos, etc.). Reusa el

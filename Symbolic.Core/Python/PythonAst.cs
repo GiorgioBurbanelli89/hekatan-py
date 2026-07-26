@@ -1,5 +1,5 @@
 // =============================================================================
-// Calcpad Suite Py — Python Abstract Syntax Tree (AST nodes)
+// Hekatan Python3 — Python Abstract Syntax Tree (AST nodes)
 // =============================================================================
 //   AST de un statement Python. Evaluado por PythonEvaluator.
 //   Render HTML por PythonHtmlWriter. Ningún nodo referencia tipos de Calcpad.

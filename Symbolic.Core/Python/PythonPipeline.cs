@@ -1,5 +1,5 @@
 // =============================================================================
-// Calcpad Suite Py — Python Pipeline: fachada Tokenizer + Parser + Evaluator
+// Hekatan Python3 — Python Pipeline: fachada Tokenizer + Parser + Evaluator
 //                    + HtmlWriter, con fallback al intérprete python real.
 // =============================================================================
 //   Entry-point único para ejecutar un script Python y obtener HTML.
@@ -9,6 +9,7 @@
 //   real del sistema (subprocess), reusando el patrón ya existente en Calcpad.
 // =============================================================================
 using System;
+using Markdig;
 using System.Collections.Generic;
 using System.Net;
 using System.Text;
@@ -37,11 +38,29 @@ namespace Calcpad.Core.Python
         public bool LastRanWithRealPython { get; private set; }
 
         private bool _noAutoNative;   // #noauto/#solografica en el motor nativo: no auto-render de variables
+        private HashSet<int> _hiddenLines = new HashSet<int>();   // líneas dentro de un bloque #hide…#show
 
         public string Run(string source)
         {
             LastRanWithRealPython = false;
             _noAutoNative = source.Contains("#noauto") || source.Contains("#solografica");
+
+            // Bloques #hide … #show: se calculan por NÚMERO DE LÍNEA desde el source crudo.
+            // Robusto: un `#show` tras un `for`/`def`/`if` lo absorbe el parser dentro del cuerpo
+            // (no aparece como statement suelto), así que detectarlo en el AST fallaba (tragaba
+            // el heading siguiente). Por línea es inmune a esa absorción.
+            _hiddenLines = new HashSet<int>();
+            {
+                var _sl = source.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n');
+                bool _hid = false;
+                for (int _i = 0; _i < _sl.Length; _i++)
+                {
+                    var _t = _sl[_i].Trim();
+                    if (_t == "#hide") { _hid = true; continue; }
+                    if (_t == "#show") { _hid = false; continue; }
+                    if (_hid) _hiddenLines.Add(_i + 1);   // líneas 1-based (como PyToken.Line)
+                }
+            }
 
             // Directiva por-script `#venv`/`#env`: si el .py declara su entorno,
             // ese python.exe tiene prioridad sobre la elección del menú, SOLO para
@@ -103,6 +122,7 @@ namespace Calcpad.Core.Python
         // ===================================================================
         private string RunNative(List<PyNode> stmts)
         {
+            _htmlBlock = false;   // estado limpio de bloque HTML al arrancar el render
             var sb = new StringBuilder();
             var dispBuffer = new StringBuilder();
             _evaluator.Output = msg => dispBuffer.Append(msg);
@@ -130,6 +150,37 @@ namespace Calcpad.Core.Python
                 // Comentario INLINE = directiva del statement anterior (ya consumida) → no renderizar.
                 if (stmt is CommentStmt ics && ics.IsInline)
                     continue;
+
+                // Bloque #hide … #show (por número de línea): ejecuta lo ejecutable y descarta
+                // todo el render (echo + prints). Inmune a la absorción del `#show` por un for/def.
+                if (_hiddenLines.Contains(stmt?.Line ?? -1))
+                {
+                    if (stmt is not CommentStmt)
+                    {
+                        try { _evaluator.ExecuteOne(stmt, _evaluator.Globals); }
+                        catch (PythonNotSupported) { throw; }
+                        catch { /* en bloque oculto no rompemos el reporte por un error de una línea */ }
+                        dispBuffer.Clear();   // descartar prints emitidos dentro del bloque oculto
+                    }
+                    continue;
+                }
+
+                // Agrupar #' (Markdown) consecutivos → un bloque (listas/tablas multilínea) — EMBEBIDO, sin python real.
+                if (stmt is CommentStmt mcs && !mcs.IsInline
+                    && PythonHtmlWriter.CommentKind(mcs.Text, out _) == "text")
+                {
+                    var mdLines = new List<string>();
+                    int j = idx;
+                    while (j < stmts.Count && stmts[j] is CommentStmt c2 && !c2.IsInline
+                           && PythonHtmlWriter.CommentKind(c2.Text, out var cc) == "text")
+                    { mdLines.Add(cc.Trim()); j++; }
+                    FlushDisp(mcs.Line);
+                    string mdHtml = PythonHtmlWriter.RenderMarkdown(string.Join("\n", mdLines));
+                    if (!string.IsNullOrEmpty(mdHtml))
+                        sb.Append($"<div class=\"line\" id=\"line-{mcs.Line}\">").Append(mdHtml).Append("</div>\n");
+                    idx = j - 1;   // el for hará idx++
+                    continue;
+                }
 
                 // ¿Directiva inline para ESTE statement? (comentario en la misma línea, a continuación)
                 string directive = null, directiveText = null;
@@ -294,8 +345,15 @@ namespace Calcpad.Core.Python
 
         /// <summary>Renderiza UNA línea de stdout de python (para streaming): __CPSPY_IMG__→&lt;img&gt;,
         /// __CPSPY_HTML__→HTML crudo, resto→texto pre-wrap. Líneas en blanco → "".</summary>
-        private static string RenderStdoutLine(string ln)
+        private string RenderStdoutLine(string ln)
         {
+            // Bloque HTML MULTI-LÍNEA (visor WebGL/canvas 3D): estado persistente entre líneas del stream.
+            if (_htmlBlock)
+            {
+                if (ln.StartsWith(HtmlEnd, StringComparison.Ordinal)) { _htmlBlock = false; return ""; }
+                return ln + "\n";   // crudo
+            }
+            if (ln.StartsWith(HtmlBegin, StringComparison.Ordinal)) { _htmlBlock = true; return ""; }
             if (ln.StartsWith(ImgMarker, StringComparison.Ordinal))
             {
                 var b64 = ln.Substring(ImgMarker.Length).Trim();
@@ -309,7 +367,7 @@ namespace Calcpad.Core.Python
             if (ln.StartsWith(HtmlMarker, StringComparison.Ordinal))
                 return ln.Substring(HtmlMarker.Length) + "\n";
             if (ln.TrimEnd().Length == 0) return "";
-            return "<p class=\"line\"><span class=\"eq\"><span style=\"white-space:pre;font-family:Consolas,'Courier New',monospace\">" +
+            return "<p class=\"line\"><span class=\"eq\"><span style=\"white-space:pre-wrap\">" +
                 WebUtility.HtmlEncode(ln) + "</span></span></p>\n";
         }
 
@@ -321,15 +379,22 @@ namespace Calcpad.Core.Python
         private const string ImgMarker = "__CPSPY_IMG__:";
         private const string GifMarker = "__CPSPY_GIF__:";   // animación → GIF embebido
         private const string HtmlMarker = "__CPSPY_HTML__:";
+        private const string HtmlBegin = "__CPSPY_HTML_BEGIN__";   // bloque HTML MULTI-LÍNEA (visor WebGL, etc.)
+        private const string HtmlEnd = "__CPSPY_HTML_END__";
 
         /// <summary>&lt;img&gt; centrado con data-uri base64 del tipo dado (png/gif).</summary>
         private static string ImgTag(string b64, string kind) =>
             "<p class=\"line\" style=\"text-align:center\"><img src=\"data:image/" + kind +
             ";base64," + b64 + "\" style=\"max-width:100%;height:auto\"/></p>\n";
 
+        // Estado del bloque HTML multi-línea (__CPSPY_HTML_BEGIN__..._END__). Es CAMPO (no local) para
+        // que PERSISTA entre llamadas: el motor embebido hace FlushDisp por cada print() y el streaming
+        // WPF procesa línea por línea, así que el estado debe sobrevivir a cada chunk.
+        private bool _htmlBlock;
+
         /// <summary>Renderiza el stdout de python: texto plano como bloque pre-wrap,
         /// __CPSPY_IMG__ como &lt;img&gt;, y __CPSPY_HTML__ como HTML crudo (markup Calcpad).</summary>
-        private static string RenderStdout(string stdout)
+        private string RenderStdout(string stdout)
         {
             var sb = new StringBuilder();
             var lines = stdout.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n');
@@ -339,13 +404,22 @@ namespace Calcpad.Core.Python
                 if (text.Length == 0) return;
                 var t = text.ToString().TrimEnd('\n');
                 if (t.Length > 0)
-                    sb.Append("<p class=\"line\"><span class=\"eq\"><span style=\"white-space:pre;font-family:Consolas,'Courier New',monospace\">")
+                    sb.Append("<p class=\"line\"><span class=\"eq\"><span style=\"white-space:pre-wrap\">")
                       .Append(WebUtility.HtmlEncode(t))
                       .Append("</span></span></p>\n");
                 text.Clear();
             }
             foreach (var ln in lines)
             {
+                // Bloque HTML MULTI-LÍNEA: entre __CPSPY_HTML_BEGIN__ y __CPSPY_HTML_END__ todo va CRUDO
+                // (para visores WebGL/canvas 3D con saltos de línea, que el single-line __CPSPY_HTML__ escapaba).
+                if (_htmlBlock)
+                {
+                    if (ln.StartsWith(HtmlEnd, StringComparison.Ordinal)) { _htmlBlock = false; }
+                    else sb.Append(ln).Append('\n');
+                    continue;
+                }
+                if (ln.StartsWith(HtmlBegin, StringComparison.Ordinal)) { FlushText(); _htmlBlock = true; continue; }
                 if (ln.StartsWith(ImgMarker, StringComparison.Ordinal))
                 {
                     FlushText();
@@ -420,7 +494,9 @@ namespace Calcpad.Core.Python
             bool noPrint = source.Contains("#noprint");
             // #nofig → Suite-Py NO embebe NINGUNA figura de matplotlib (en Python real igual abren ventana).
             bool noFig = usesMpl && source.Contains("#nofig");
-            bool needsTransform = hasVisibleComments || hasShow || noPrint || source.Contains("#nosuite");
+            // pandas.DataFrame se auto-renderiza como tabla HTML (estilo notebook) → inyectar helpers.
+            bool usesTable = source.Contains("DataFrame") || source.Contains("read_csv") || source.Contains("read_excel");
+            bool needsTransform = hasVisibleComments || hasShow || noPrint || usesTable || source.Contains("#cp") || source.Contains("#nosuite");
             if ((names.Count == 0 || noAuto) && !usesMpl && !usesPv && !needsTransform) return source;
             var sb = new StringBuilder();
             sb.Append("_realprint = print\n");      // print REAL para uso interno (markers/figuras)
@@ -446,11 +522,38 @@ namespace Calcpad.Core.Python
         {
             var lines = source.Replace("\r\n", "\n").Split('\n');
             var outp = new StringBuilder();
+            bool insideCp = false;   // dentro de un bloque  #cp[ … #cp]
+            System.Collections.Generic.List<string> cpBlock = null;
+            System.Collections.Generic.List<string> mdBuf = null;   // líneas #' consecutivas → Markdown multilínea
+            string mdIndent = "";
             foreach (var raw in lines)
             {
                 int i = 0;
                 while (i < raw.Length && (raw[i] == ' ' || raw[i] == '\t')) i++;
                 string rest = raw.Substring(i);
+                // Al salir de un grupo de líneas #' consecutivas, volcar el Markdown acumulado (listas, tablas).
+                if (mdBuf != null && !insideCp && !rest.StartsWith("#'"))
+                { outp.Append(FlushMarkdown(mdBuf, mdIndent)); mdBuf = null; }
+                // --- Calcpad (#cp): inline = simbólico; bloque #cp[ … #cp] = Calcpad completo evaluado ---
+                if (rest.StartsWith("#cp["))                     // abre bloque
+                { insideCp = true; cpBlock = new System.Collections.Generic.List<string>(); continue; }
+                if (rest.StartsWith("#cp]"))                     // cierra bloque → Calcpad completo ($Sum, #for, #noc, sqrt)
+                {
+                    insideCp = false;
+                    EmitCalcpadBlock(outp, raw.Substring(0, i), string.Join("\n", cpBlock ?? new System.Collections.Generic.List<string>()));
+                    cpBlock = null;
+                    continue;
+                }
+                if (insideCp)                                    // acumular la línea (quitar UN '#')
+                {
+                    cpBlock?.Add(rest.StartsWith("#") ? rest.Substring(1) : rest);
+                    continue;
+                }
+                if (rest.StartsWith("#cp ") || rest.StartsWith("#cp\t"))   // inline: simbólico (#sym)
+                {
+                    EmitCalcpadSymbolic(outp, raw.Substring(0, i), rest.Substring(3).Trim());
+                    continue;
+                }
                 // línea de CÓDIGO con marcador trailing #nosuite → NO se ejecuta en Suite-Py
                 // (se vuelve 'pass'); en Python real (IDLE) la línea corre normal porque el
                 // #nosuite es solo un comentario al final. Ideal para prints de depuración.
@@ -476,22 +579,107 @@ namespace Calcpad.Core.Python
                     outp.Append(raw).Append('\n');   // "#show" sin nombre → comentario normal
                     continue;
                 }
-                if (rest.StartsWith("#'") || rest.StartsWith("#\""))
+                if (rest.StartsWith("#\""))          // #" → título h3 (encabezado destacado)
                 {
-                    bool heading = rest[1] == '"';
                     string content = rest.Substring(2).Trim();
                     if (content.Length == 0) { outp.Append('\n'); continue; }
                     string enc = WebUtility.HtmlEncode(content).Replace("'", "&#39;");
-                    string html = heading
-                        ? "<h3>" + enc + "</h3>"
-                        : "<p class=\"line\"><span class=\"eq\"><span style=\"white-space:pre-wrap\">" + enc + "</span></span></p>";
-                    string pyStr = html.Replace("\\", "\\\\");   // (enc ya no tiene comillas simples)
-                    outp.Append(raw.Substring(0, i))             // conservar indentación
-                        .Append("_realprint('__CPSPY_HTML__:").Append(pyStr).Append("')\n");
+                    outp.Append(raw.Substring(0, i))
+                        .Append("_realprint('__CPSPY_HTML__:").Append(("<h3>" + enc + "</h3>").Replace("\\", "\\\\")).Append("')\n");
+                }
+                else if (rest.StartsWith("#'"))       // #' → texto MARKDOWN (acumular para multilínea: listas, tablas)
+                {
+                    if (mdBuf == null) { mdBuf = new System.Collections.Generic.List<string>(); mdIndent = raw.Substring(0, i); }
+                    mdBuf.Add(rest.Substring(2).TrimStart());
                 }
                 else outp.Append(raw).Append('\n');
             }
+            if (mdBuf != null) outp.Append(FlushMarkdown(mdBuf, mdIndent));   // grupo #' final
             return outp.ToString();
+        }
+
+        // Vuelca un grupo de líneas #' consecutivas como un solo bloque Markdown (para listas/tablas multilínea).
+        private static string FlushMarkdown(System.Collections.Generic.List<string> mdLines, string indent)
+        {
+            string html = RenderMarkdown(string.Join("\n", mdLines));
+            string pyStr = html.Replace("\\", "\\\\").Replace("'", "&#39;").Replace("\r", " ").Replace("\n", " ");
+            return indent + "_realprint('__CPSPY_HTML__:" + pyStr + "')\n";
+        }
+
+        // #' → Markdown (Markdig, GFM: negrita **, cursiva *, tachado ~~, listas, tablas |, task lists, links).
+        private static Markdig.MarkdownPipeline _mdPipe;
+        private static string RenderMarkdown(string md)
+        {
+            try
+            {
+                _mdPipe ??= new Markdig.MarkdownPipelineBuilder()
+                    .UseEmphasisExtras().UseListExtras().UsePipeTables().UseGridTables().UseAutoLinks().UseTaskLists().Build();
+                string html = Markdig.Markdown.ToHtml(md, _mdPipe).Trim();
+                // Un solo párrafo (línea inline) → envolver en el estilo de línea de Suite Py; listas/tablas/headings van tal cual.
+                if (html.StartsWith("<p>", StringComparison.Ordinal) && html.EndsWith("</p>", StringComparison.Ordinal)
+                    && html.IndexOf("<p>", 3, StringComparison.Ordinal) < 0)
+                    return "<p class=\"line\"><span class=\"eq\">" + html.Substring(3, html.Length - 7) + "</span></p>";
+                return html;
+            }
+            catch { return "<p class=\"line\"><span class=\"eq\">" + WebUtility.HtmlEncode(md) + "</span></p>"; }
+        }
+
+        // #cp — renderiza una expresión como fórmula de Calcpad (símbolos, SIN evaluar números)
+        // y la emite como HTML en su posición. En Python real la línea #cp es un comentario.
+        private static void EmitCalcpadSymbolic(StringBuilder outp, string indent, string expr)
+        {
+            if (string.IsNullOrWhiteSpace(expr)) { outp.Append('\n'); return; }
+            string html = RenderCalcpadSymbolic(expr);
+            string pyStr = html.Replace("\\", "\\\\").Replace("'", "&#39;").Replace("\r", " ").Replace("\n", " ");
+            outp.Append(indent).Append("_realprint('__CPSPY_HTML__:").Append(pyStr).Append("')\n");
+        }
+
+        [ThreadStatic] private static Calcpad.Core.ExpressionParser _cpEp;
+        private static string RenderCalcpadSymbolic(string expr)
+        {
+            try
+            {
+                _cpEp ??= new Calcpad.Core.ExpressionParser();
+                _cpEp.Parse("#sym " + expr, calculate: true, getXml: true);   // #sym = simbólico (vars=símbolos, sqrt→√, $sum→Σ)
+                string html = _cpEp.HtmlResult ?? "";
+                int b = html.IndexOf("<body", StringComparison.OrdinalIgnoreCase);   // quedarnos con el cuerpo si vino documento completo
+                if (b >= 0)
+                {
+                    int s = html.IndexOf('>', b) + 1;
+                    int e = html.IndexOf("</body>", StringComparison.OrdinalIgnoreCase);
+                    if (e > s) html = html.Substring(s, e - s);
+                }
+                return html.Trim().Replace("<i>∂</i>", "<i style=\"color:#C080F0\">∂</i>");
+            }
+            catch { return System.Net.WebUtility.HtmlEncode(expr); }
+        }
+
+        // #cp[ … #cp] bloque → Calcpad COMPLETO evaluado: $Sum{f @ k=a:b}, $Product, #for/#loop, #noc, sqrt, subíndices.
+        private static void EmitCalcpadBlock(StringBuilder outp, string indent, string code)
+        {
+            if (string.IsNullOrWhiteSpace(code)) return;
+            string html = RenderCalcpadBlock(code);
+            string pyStr = html.Replace("\\", "\\\\").Replace("'", "&#39;").Replace("\r", " ").Replace("\n", " ");
+            outp.Append(indent).Append("_realprint('__CPSPY_HTML__:").Append(pyStr).Append("')\n");
+        }
+
+        private static string RenderCalcpadBlock(string code)
+        {
+            try
+            {
+                _cpEp ??= new Calcpad.Core.ExpressionParser();
+                _cpEp.Parse(code, calculate: true, getXml: true);   // bloque completo, modo evaluación (NO #sym)
+                string html = _cpEp.HtmlResult ?? "";
+                int b = html.IndexOf("<body", StringComparison.OrdinalIgnoreCase);
+                if (b >= 0)
+                {
+                    int s = html.IndexOf('>', b) + 1;
+                    int e = html.IndexOf("</body>", StringComparison.OrdinalIgnoreCase);
+                    if (e > s) html = html.Substring(s, e - s);
+                }
+                return html.Trim().Replace("<i>∂</i>", "<i style=\"color:#C080F0\">∂</i>");
+            }
+            catch { return System.Net.WebUtility.HtmlEncode(code); }
         }
 
         // Captura de figuras matplotlib: backend Agg + plt.show() -> PNG base64 (__CPSPY_IMG__).
@@ -738,6 +926,7 @@ try:
     import pyvista as _pvcap
     _pvcap.OFF_SCREEN = True
     import numpy as _nppv, os as _ospv, tempfile as _tmppv, io as _iopv, base64 as _b64pv
+    _orig_ss = _pvcap.Plotter.screenshot
     def _cpspy_pv_tris(tm):
         fa = getattr(tm, 'faces', None); out = []
         if fa is not None and len(fa):
@@ -761,8 +950,14 @@ try:
             rng = (smax - smin) or 1.0
             calls = []; dps = []; lo3 = [1e30,1e30,1e30]; hi3 = [-1e30,-1e30,-1e30]; ntri = 0
             for m in meshes:
-                try: tm = m.triangulate()
-                except Exception: tm = m
+                try:
+                    tm = m.extract_surface()                 # FEM volumen (hexaedros/tetras) → superficie con faces
+                    try: tm = tm.cell_data_to_point_data()   # scalar por elemento (ej. DAMAGEC) → nodo: colorear + hover
+                    except Exception: pass
+                    tm = tm.triangulate()
+                except Exception:
+                    try: tm = m.triangulate()
+                    except Exception: tm = m
                 pts = _nppv.asarray(tm.points, float)
                 if len(pts) == 0: continue
                 for d in range(3): lo3[d] = min(lo3[d], float(pts[:,d].min())); hi3[d] = max(hi3[d], float(pts[:,d].max()))
@@ -781,7 +976,7 @@ try:
                     calls.append('GL3.fill3(%s,%.4f,%.4f,%.4f,%.4f);' % (arr,t0,t1,t2,t2)); ntri += 1
             if ntri == 0 or ntri > 40000:
                 from PIL import Image as _Impv
-                _img = self.screenshot(return_img=True); _bf = _iopv.BytesIO()
+                _img = _orig_ss(self, return_img=True); _bf = _iopv.BytesIO()
                 _Impv.fromarray(_img).save(_bf, format='PNG'); _bf.seek(0)
                 _realprint('__CPSPY_IMG__:' + _b64pv.b64encode(_bf.read()).decode()); return
             _gljs = open(_ospv.path.join(_tmppv.gettempdir(),'cpspy_glplot.min.js'), encoding='utf-8').read()
@@ -793,7 +988,18 @@ try:
             _realprint('__CPSPY_HTML__:' + html.replace(chr(10),' ').replace(chr(13),' '))
         except Exception as _e:
             _realprint('__CPSPY_HTML__:<p class=""err"">PyVista 3D: ' + str(_e) + '</p>')
+    def _cpspy_pv_screenshot(self, *a, **k):
+        # Suite Py: los scripts batch llaman screenshot() (no show()) → embebemos IGUAL el
+        # modelo 3D interactivo con hover, y luego hacemos el screenshot real que pide el script.
+        if getattr(self, '_cpspy_inss', False):
+            return _orig_ss(self, *a, **k)
+        self._cpspy_inss = True
+        try: _cpspy_pv_show(self)
+        except Exception: pass
+        finally: self._cpspy_inss = False
+        return _orig_ss(self, *a, **k)
     _pvcap.Plotter.show = _cpspy_pv_show
+    _pvcap.Plotter.screenshot = _cpspy_pv_screenshot
 except Exception:
     pass
 ";
@@ -807,6 +1013,12 @@ def _cpspy_n(x):
     return _cpspy_html.escape(s)
 def _cpspy_fmt(v):
     try:
+        import pandas as _pd
+        if isinstance(v, _pd.DataFrame):
+            return _cpspy_table_html(v.values.tolist(), list(v.columns))
+    except Exception:
+        pass
+    try:
         import numpy as _np
         if isinstance(v, _np.ndarray):
             if v.size > 200: return _cpspy_html.escape('ndarray shape=' + str(v.shape) + ' dtype=' + str(v.dtype))
@@ -818,20 +1030,57 @@ def _cpspy_fmt(v):
         return _cpspy_html.escape('{' + ', '.join(str(k) for k in ks[:20]) + ('' if len(ks)<=20 else ', …') + '}')
     if isinstance(v, (list, tuple)):
         flat = (len(v) > 0 and isinstance(v[0], (list, tuple)))
-        n = min(len(v), 200)                       # limitar filas para no volcar matrices enormes
-        rows = ''
+        # markup NATIVO de Calcpad: <span class=""matrix""><span class=""tr""><span class=""td"">…
+        # Los <td> vacíos de los extremos de cada fila son los corchetes que dibuja el CSS de Calcpad.
+        def _tr(cells):
+            return '<span class=""tr""><span class=""td""></span>' + ''.join('<span class=""td"">' + _cpspy_n(c) + '</span>' for c in cells) + '<span class=""td""></span></span>'
         if flat:
-            for r in v[:n]:
-                rows += '<span class=""row"">' + ''.join('<span class=""cell"">' + _cpspy_n(c) + '</span>' for c in r[:50]) + '</span>'
+            trs = ''.join(_tr(r[:50]) for r in v[:200])       # matriz: una fila (tr) por cada sublista
         else:
-            rows = '<span class=""row"">' + ''.join('<span class=""cell"">' + _cpspy_n(x) + '</span>' for x in v[:200]) + '</span>'
-        return '<span class=""mat""><span class=""lb""></span><span class=""cells"">' + rows + '</span><span class=""rb""></span></span>'
+            trs = _tr(v[:200])                                # vector: una sola fila
+        return '<span class=""matrix"">' + trs + '</span>'
     return _cpspy_n(v)
 def _cpspy_emit(name, val):
     import types as _t
     if callable(val) or isinstance(val, _t.ModuleType): return
+    try:
+        import pandas as _pdE
+        if isinstance(val, _pdE.DataFrame): return   # DataFrame se muestra con print(df), no se duplica en auto-emit
+    except Exception:
+        pass
     _h = '<p class=""line""><span class=""eq""><var>' + name + '</var> = ' + _cpspy_fmt(val) + '</span></p>'
     _realprint('__CPSPY_HTML__:' + _h.replace(chr(10),' ').replace(chr(13),' '))   # marcador es POR-LINEA → 1 sola linea
+def _cpspy_table_html(rows, headers=None, title=None):
+    _stt = 'border-collapse:collapse;margin:8px 0;font-size:0.95em'
+    _stc = 'border:1px solid #b0b0b0;padding:3px 10px;text-align:right'
+    _sth = 'border:1px solid #808080;padding:4px 10px;text-align:center;background:#e8edf7;font-weight:bold'
+    def _row(r):
+        try:
+            import numpy as _np
+            if isinstance(r, _np.ndarray): return list(r.tolist())
+        except Exception:
+            pass
+        return list(r) if isinstance(r, (list, tuple)) else [r]
+    _h = '<table style=""' + _stt + '"">'
+    if title is not None:
+        _h += '<caption style=""font-weight:bold;padding:4px 0;text-align:left"">' + _cpspy_html.escape(str(title)) + '</caption>'
+    if headers is not None:
+        _h += '<tr>' + ''.join('<th style=""' + _sth + '"">' + _cpspy_html.escape(str(c)) + '</th>' for c in _row(headers)) + '</tr>'
+    for r in rows:
+        _h += '<tr>' + ''.join('<td style=""' + _stc + '"">' + _cpspy_n(c) + '</td>' for c in _row(r)) + '</tr>'
+    return _h + '</table>'
+_cpspy_print0 = print
+def print(*_a, **_k):
+    # print(DataFrame) → tabla HTML embebida en Suite Py; en Python real es print normal (texto).
+    if len(_a) == 1:
+        try:
+            import pandas as _pdP
+            if isinstance(_a[0], _pdP.DataFrame):
+                _realprint('__CPSPY_HTML__:' + _cpspy_table_html(_a[0].values.tolist(), list(_a[0].columns)))
+                return
+        except Exception:
+            pass
+    return _cpspy_print0(*_a, **_k)
 ";
     }
 }

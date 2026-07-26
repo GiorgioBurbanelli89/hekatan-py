@@ -1,5 +1,5 @@
 // =============================================================================
-// Calcpad Suite Py — Python Parser (recursive descent + precedence climbing)
+// Hekatan Python3 — Python Parser (recursive descent + precedence climbing)
 // =============================================================================
 //   Convierte List<PyToken> en una lista de statements (PyNode). Maneja suites
 //   por INDENT/DEDENT, comparaciones encadenadas, comprensiones, f-strings,

@@ -1,5 +1,5 @@
 // =============================================================================
-// Calcpad Suite Py — Modelos de valor del runtime Python nativo
+// Hekatan Python3 — Modelos de valor del runtime Python nativo
 // =============================================================================
 //   Los valores Python se representan con tipos .NET:
 //     int   → long          float → double        bool → bool

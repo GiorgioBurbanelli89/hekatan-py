@@ -1,5 +1,5 @@
 // =============================================================================
-// Calcpad Suite Py — Métodos builtin de tipos nativos (str, list, dict, set)
+// Hekatan Python3 — Métodos builtin de tipos nativos (str, list, dict, set)
 // =============================================================================
 //   GetMethod(obj, name) devuelve un PyBuiltin con Self ligado, o null.
 //   Por convención args[0] == self (CallCallable antepone Self).

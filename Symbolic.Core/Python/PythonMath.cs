@@ -1,5 +1,5 @@
 // =============================================================================
-// Calcpad Suite Py — Módulo nativo `math`
+// Hekatan Python3 — Módulo nativo `math`
 // =============================================================================
 using System;
 using System.Collections.Generic;

@@ -1,4 +1,4 @@
-# Calcpad Suite Py
+# Hekatan Python3
 
 **Python-syntax scientific worksheets** — same WPF + CLI experience as
 [Calcpad](https://calcpad.eu/) but the parser reads pure `.py` files instead
@@ -11,11 +11,39 @@ system `python` for `numpy` / `scipy` / `matplotlib` / `plotly`.
 > Same renderized HTML/PDF/DOCX output as Calcpad, same auto-run-on-save,
 > same template — only the input syntax is Python.
 
-📥 **Download:** [CalcpadSuitePy-Setup-1.0.10.exe](https://github.com/GiorgioBurbanelli89/Calcpad-Suite-Py/releases) (self-contained, no .NET required)
-📁 Ejemplos `.py` bundleados con el installer (se copian a `Documents\Calcpad Suite Py\Examples\`).
+📥 **Download:** [CalcpadSuitePy-Setup-1.0.11.exe](https://github.com/GiorgioBurbanelli89/Calcpad-Suite-Py/releases) (self-contained, no .NET required)
+📁 Ejemplos `.py` bundleados con el installer (se copian a `Documents\Hekatan Python3\Examples\`).
 
 > ℹ️ El motor MATLAB (`.m`) vive en el proyecto hermano **Calcpad Lab** — ver
 > [`README-CalcpadLab.md`](./README-CalcpadLab.md). Este repo es la variante **Python-only**.
+
+---
+
+## Novedades — Notebook de ingeniería: `#cp` + Markdown + resultados matemáticos (v1.0.11, 2026-07-02)
+
+Suite Py ahora es un **notebook de ingeniería tipo Jupyter**: escribís código Python y ves las
+**expresiones simbólicas renderizadas** junto al cálculo real. Todo va dentro de comentarios `#`,
+así que **el `.py` corre igual en Python real / IDLE** (son comentarios inertes). Todo **embebido en C#**
+(sin depender de Python externo para las fórmulas ni el texto):
+
+- **`#cp` — fórmulas de Calcpad dentro de Python.** Inline `#cp F = m*a` (simbólico) o bloque
+  `#cp[ … #cp]` (Calcpad completo evaluado). Renderiza √, subíndices `_`, fracciones, **matrices con
+  el CSS de Calcpad**, y operadores especiales en **morado**: **∂** derivadas parciales (`pdiff`),
+  **∫** integrales (`$Area`), **∑** sumatorias (`$Sum`), **∏** productos (`$Product`). Las derivadas
+  simbólicas las calcula **AngouriMath** embebido (ej. `pdiff(1-ξ²(3-2ξ); ξ; 2) = 12ξ−6`).
+- **`#'` — Markdown (GFM vía Markdig, embebido).** `**negrita**`, `*cursiva*`, `~~tachado~~`,
+  encabezados `#`, **listas**, **tablas** `| … |`, task lists `- [ ]`, links. Las líneas `#'`
+  consecutivas se agrupan (listas y tablas multilínea salen como un bloque).
+- **`#show variable`** → muestra el resultado numérico en **formato matemático de Calcpad** (no en la
+  fuente monoespaciada de `print`), para un worksheet uniforme.
+- **`#noc`** → muestra una fórmula con sus símbolos (Σ, ∫, √) **sin el resultado numérico**.
+- **numpy embebido en C#** (`array`, `@`, `.T`, `linalg.solve`, `linalg.eigh`) — resuelve sistemas
+  y autovalores sin Python externo.
+
+Ejemplo completo bundleado: **`06 Notebook Calcpad/rectangular_slab_fea.py`** — Análisis por elementos
+finitos de una losa rectangular (numpy ensambla K y resuelve, validado −0.8 % vs Navier) con la
+ecuación de placa `∂⁴w/∂x⁴`, funciones de forma, la **matriz de rigidez como doble integral con
+Jacobiano** `∫∫ Bᵀ·D·B·|J| dξ dη`, y la deformada **3D con hover**.
 
 ---
 
@@ -53,7 +81,7 @@ Código: `Symbolic.Core/Python/PythonEnvironments.cs` (motor) + menú `Python` e
 
 ---
 
-## Novedades — Calcpad Suite Py v1.0.2 (2026-06-20)
+## Novedades — Hekatan Python3 v1.0.2 (2026-06-20)
 
 **Scripts de Python REAL (numpy + matplotlib) renderizados como worksheet.** Todo el script
 corre en el Python del sistema con sus librerías; el reporte muestra prints, variables y la
@@ -87,11 +115,11 @@ Doc: `calcpad-draw/EQUIVALENCIAS_PYTHON_CalcpadSuitePy.md`.
 
 ---
 
-## Why Calcpad Suite Py?
+## Why Hekatan Python3?
 
 Calcpad oficial es excelente para matemática de ingeniería con su render nativo
 de ecuaciones, pero su sintaxis `.cpd` tiene una curva de aprendizaje fuerte para
-ingenieros que vienen de Python. **Calcpad Suite Py mantiene todas las fortalezas
+ingenieros que vienen de Python. **Hekatan Python3 mantiene todas las fortalezas
 visuales de Calcpad (fórmulas renderizadas, auto-run, export PDF/Word, gráficas
 inline)** y reemplaza la sintaxis de entrada por **Python estándar**.
 
@@ -127,7 +155,7 @@ que Calcpad pero con Python.
 1. Descargar **CalcpadSuitePy-Setup-1.0.10.exe** desde los
    [releases del repo](https://github.com/GiorgioBurbanelli89/Calcpad-Suite-Py/releases).
 2. Doble-click → aceptar UAC → seguir el wizard (acepta asociación `.py` para abrir scripts con doble-click).
-3. Al primer arranque, los ejemplos se copian a `Documents\Calcpad Suite Py\Examples\`.
+3. Al primer arranque, los ejemplos se copian a `Documents\Hekatan Python3\Examples\`.
 4. Abrir cualquier `.py` (`Ctrl+O`) o crear uno nuevo (`Ctrl+N`); con **AutoRun** se ejecuta al guardar.
 
 **No requiere .NET Desktop Runtime** — el runtime .NET 10 viaja dentro del installer (self-contained).
@@ -273,7 +301,7 @@ Examples/                ← ejemplos .py (matemáticas, FEM, física, estructur
 
 ## FEM / validación
 
-Calcpad Suite Py es una de las piezas de validación de
+Hekatan Python3 es una de las piezas de validación de
 [Hekatan Struct](https://github.com/GiorgioBurbanelli89/hekatan-struct), la
 plataforma de análisis estructural en navegador. Los mismos benchmarks se corren
 en **varios lenguajes en paralelo** (Python / C++ WASM / API de ETABS-SAP) y deben

@@ -1,5 +1,5 @@
 // =============================================================================
-// Calcpad Suite Py — Python Evaluator (tree-walking interpreter)
+// Hekatan Python3 — Python Evaluator (tree-walking interpreter)
 // =============================================================================
 //   Ejecuta el AST producido por PythonParser. Soporta un subset amplio de
 //   Python: aritmética, control de flujo, funciones, clases, comprensiones,
@@ -46,7 +46,7 @@ namespace Calcpad.Core.Python
         private TclInterop _opensees;   // intérprete OpenSees nativo (MKL Pardiso+JIT), creado on-demand
 
         private static readonly HashSet<string> NativeModules = new(StringComparer.Ordinal)
-        { "math", "cmath", "openseespy", "opensees", "openseespywin", "numpy" };
+        { "math", "cmath", "openseespy", "opensees", "openseespywin", "numpy", "scipy" };
 
         public PythonEvaluator()
         {
@@ -80,28 +80,12 @@ namespace Calcpad.Core.Python
                     var r = fr.Module.TrimStart('.').Split('.')[0];
                     if (r.Length > 0 && !NativeModules.Contains(r)) { reason = $"from {fr.Module} import ..."; return false; }
                     return true;
-                case IfStmt iff:
-                    foreach (var (_, b) in iff.Branches) foreach (var x in b) if (!CheckImports(x, ref reason)) return false;
-                    return true;
-                case ForStmt fo:
-                    foreach (var x in fo.Body) if (!CheckImports(x, ref reason)) return false;
-                    return true;
-                case WhileStmt wh:
-                    foreach (var x in wh.Body) if (!CheckImports(x, ref reason)) return false;
-                    return true;
-                case FuncDef fd:
-                    foreach (var x in fd.Body) if (!CheckImports(x, ref reason)) return false;
-                    return true;
-                case ClassDef cd:
-                    foreach (var x in cd.Body) if (!CheckImports(x, ref reason)) return false;
-                    return true;
-                case TryStmt tr:
-                    foreach (var x in tr.Body) if (!CheckImports(x, ref reason)) return false;
-                    foreach (var h in tr.Handlers) foreach (var x in h.Body) if (!CheckImports(x, ref reason)) return false;
-                    return true;
-                case WithStmt wi:
-                    foreach (var x in wi.Body) if (!CheckImports(x, ref reason)) return false;
-                    return true;
+                // Imports dentro de bloques de control (if/for/while/try/with/def/class) son CONDICIONALES
+                // o GUARDADOS -> NO fuerzan fallback a Python externo; se resuelven en runtime (y si el
+                // modulo no es nativo lanzan ImportError atrapable). Solo imports INCONDICIONALES top-level
+                // fuerzan fallback. Esto arregla el idioma try/except-import (dependencias opcionales).
+                case IfStmt: case ForStmt: case WhileStmt:
+                case FuncDef: case ClassDef: case TryStmt: case WithStmt:
                 default:
                     return true;
             }
@@ -265,9 +249,15 @@ namespace Calcpad.Core.Python
                     bool match = h.ExcType == null;
                     if (!match)
                     {
-                        var et = Eval(h.ExcType, scope);
-                        string name = et is PyClass pc ? pc.Name : (et is PyBuiltin pb ? pb.Name : PyOps.Str(et));
+                        // Usa el NOMBRE del tipo de excepcion sintacticamente (except ImportError:)
+                        // sin requerir que ImportError/NameError/... esten definidos como builtins.
+                        string name = h.ExcType is NameRef nrx ? nrx.Name
+                                    : (Eval(h.ExcType, scope) is object et
+                                        ? (et is PyClass pc ? pc.Name : (et is PyBuiltin pb ? pb.Name : PyOps.Str(et)))
+                                        : "");
                         if (name == excType || name == "Exception" || name == "BaseException") match = true;
+                        // subclases: ModuleNotFoundError es-un ImportError
+                        else if (name == "ImportError" && excType == "ModuleNotFoundError") match = true;
                     }
                     if (match)
                     {
@@ -300,16 +290,30 @@ namespace Calcpad.Core.Python
         {
             foreach (var (mod, alias) in im.Names)
             {
-                var root = mod.Split('.')[0];
-                var m = LoadNativeModule(root);
-                scope.Set(alias ?? root, m);
+                var parts = mod.Split('.');
+                var root = LoadNativeModule(parts[0]);
+                var leaf = root;
+                for (int i = 1; i < parts.Length; i++)
+                {
+                    if (leaf.Attrs.TryGetValue(parts[i], out var sub) && sub is PyModule subm) leaf = subm;
+                    else throw new PythonNotSupported($"módulo {mod}");
+                }
+                // 'import a.b.c' liga el nombre RAÍZ 'a'; 'import a.b.c as x' liga x = hoja.
+                if (alias != null) scope.Set(alias, leaf);
+                else scope.Set(parts[0], root);
             }
         }
 
         private void ExecImportFrom(ImportFromStmt fr, PyScope scope)
         {
-            var root = fr.Module.TrimStart('.').Split('.')[0];
-            var m = LoadNativeModule(root);
+            var parts = fr.Module.TrimStart('.').Split('.');
+            var m = LoadNativeModule(parts[0]);
+            // navega submódulos: from scipy.sparse.linalg import spsolve → scipy→sparse→linalg
+            for (int i = 1; i < parts.Length; i++)
+            {
+                if (m.Attrs.TryGetValue(parts[i], out var sub) && sub is PyModule subm) m = subm;
+                else throw new PythonNotSupported($"módulo {fr.Module}");
+            }
             if (fr.ImportStar)
             {
                 foreach (var kv in m.Attrs) scope.Set(kv.Key, kv.Value);
@@ -332,10 +336,16 @@ namespace Calcpad.Core.Python
             // numpy EMBEBIDO (PyNdArray + BlasInterop/LapackInterop) — sin Python externo.
             if (name == "numpy")
                 return _numpyModule ??= PyNumpy.CreateModule();
-            throw new PythonNotSupported($"módulo {name}");
+            // scipy EMBEBIDO (scipy.sparse+spsolve, scipy.linalg, scipy.optimize) — sin Python externo.
+            if (name == "scipy")
+                return _scipyModule ??= PythonScipy.CreateModule(this);
+            // Modulo no nativo -> ImportError atrapable (como python real), para que
+            // 'try: import X except ImportError:' funcione (dependencias opcionales).
+            throw new PyRuntimeError("ModuleNotFoundError", $"No module named '{name}'");
         }
         private PyModule _opsModule;
         private PyModule _numpyModule;
+        private PyModule _scipyModule;
 
         private string _opsPatHeader;       // patrón de cargas abierto (replica el buffer de openseespy)
         private StringBuilder _opsPatBody;
@@ -935,6 +945,22 @@ namespace Calcpad.Core.Python
                 case PyRange r: foreach (var x in r) yield return x; break;
                 case string str: foreach (var ch in str) yield return ch.ToString(); break;
                 case PyDict d: foreach (var k in d.Keys) yield return k; break;
+                case PyNdArray nd:
+                    // numpy: iterar recorre el PRIMER eje -> 1D da escalares, 2D da filas (sub-arrays 1D)
+                    if (nd.Ndim == 1)
+                        for (int i = 0; i < nd.Shape[0]; i++)
+                            yield return nd.IsInt ? (object)(long)System.Math.Round(nd.Data[i]) : nd.Data[i];
+                    else
+                    {
+                        int c = nd.Cols;
+                        for (int i = 0; i < nd.Rows; i++)
+                        {
+                            var row = new double[c];
+                            System.Array.Copy(nd.Data, i * c, row, 0, c);
+                            yield return new PyNdArray(row, new[] { c }, nd.IsInt);
+                        }
+                    }
+                    break;
                 case IEnumerable<object> en: foreach (var x in en) yield return x; break;
                 case null: throw new PyRuntimeError("TypeError", "'NoneType' object is not iterable");
                 default: throw new PyRuntimeError("TypeError", $"'{PyOps.TypeName(o)}' object is not iterable");
@@ -1057,6 +1083,11 @@ namespace Calcpad.Core.Python
                     return err.Message;
                 case PyNdArray arr:
                     return PyNumpy.GetAttr(arr, name);   // .T, .shape, .copy(), .sum(), ...
+                case PySparseMatrix spm:
+                    return PythonScipy.GetAttr(spm, name);   // .shape, .nnz, .toarray(), .dot(x), .T
+                case PySciResult sr:                          // res.x/.fun/.t/.y, norm.cdf/.pdf/.ppf
+                    if (sr.Attrs.TryGetValue(name, out var srv)) return srv;
+                    throw new PyRuntimeError("AttributeError", $"result object has no attribute '{name}'");
             }
             // Métodos builtin de tipos nativos
             var method = PythonBuiltinMethods.GetMethod(obj, name, this);
@@ -1336,6 +1367,87 @@ namespace Calcpad.Core.Python
                 HtmlOut(html);
                 return null;
             });
+            // mesh3d_viewer(nodes, faces, fields, title=""): visor 3D ORBIT genérico para SÓLIDOS.
+            // nodes=lista de [x,y,z]; faces=lista de caras de superficie [i,j,k] o [i,j,k,l];
+            // fields=dict nombre->valores nodales. THREE.js OrbitControls (arrastra/zoom/hover), jet_r.
+            Reg("mesh3d_viewer", (a, kw) =>
+            {
+                if (a.Length < 3)
+                    throw new PyRuntimeError("TypeError", "mesh3d_viewer(nodes, faces, fields, title='')");
+                var nl = (PyList)a[0];
+                var nodes = new double[nl.Count][];
+                for (int i = 0; i < nodes.Length; i++)
+                {
+                    var p = (PyList)nl.Items[i];
+                    nodes[i] = new[] { PyOps.ToDouble(p.Items[0]), PyOps.ToDouble(p.Items[1]), PyOps.ToDouble(p.Items[2]) };
+                }
+                var el = (PyList)a[1];
+                var tris = new List<int[]>();
+                foreach (var eo in el.Items)
+                {
+                    var e = (PyList)eo;
+                    var ix = new int[e.Count];
+                    for (int k = 0; k < ix.Length; k++) ix[k] = (int)PyOps.ToLong(e.Items[k]);
+                    if (ix.Length >= 4) { tris.Add(new[] { ix[0], ix[1], ix[2] }); tris.Add(new[] { ix[0], ix[2], ix[3] }); }
+                    else if (ix.Length == 3) tris.Add(new[] { ix[0], ix[1], ix[2] });
+                }
+                var fd = (PyDict)a[2];
+                var names = new string[fd.Count];
+                var vals = new double[fd.Count][];
+                for (int i = 0; i < fd.Count; i++)
+                {
+                    names[i] = PyOps.Str(fd.Keys[i]);
+                    var vl = (PyList)fd.Values[i];
+                    var va = new double[vl.Count];
+                    for (int k = 0; k < va.Length; k++) va[k] = PyOps.ToDouble(vl.Items[k]);
+                    vals[i] = va;
+                }
+                string title = a.Length >= 4 ? PyOps.Str(a[3]) : "Campo FEM 3D";
+                string html = PythonViz.Solid3DViewer(nodes, tris.ToArray(), names, vals, title, "m3" + (++_vizId));
+                HtmlOut(html);
+                return null;
+            });
+            // solid3d_viewer(nodes, elems, fields, title=""): SÓLIDO MACIZO desde elementos de
+            // VOLUMEN (tetraedros [i,j,k,l] o hexaedros [8 idx]). Extrae la PIEL exterior automatica-
+            // mente (caras que aparecen 1 vez) -> cuerpo solido cerrado. Al filtrar elementos, el
+            // corte queda RELLENO con la seccion interna (sin huecos). Orbit 3D, jet_r.
+            Reg("solid3d_viewer", (a, kw) =>
+            {
+                if (a.Length < 3)
+                    throw new PyRuntimeError("TypeError", "solid3d_viewer(nodes, elems, fields, title='')");
+                var nl = (PyList)a[0];
+                var nodes = new double[nl.Count][];
+                for (int i = 0; i < nodes.Length; i++)
+                {
+                    var p = (PyList)nl.Items[i];
+                    nodes[i] = new[] { PyOps.ToDouble(p.Items[0]), PyOps.ToDouble(p.Items[1]), PyOps.ToDouble(p.Items[2]) };
+                }
+                var el = (PyList)a[1];
+                var elems = new List<int[]>();
+                foreach (var eo in el.Items)
+                {
+                    var e = (PyList)eo;
+                    var ix = new int[e.Count];
+                    for (int k = 0; k < ix.Length; k++) ix[k] = (int)PyOps.ToLong(e.Items[k]);
+                    elems.Add(ix);
+                }
+                var fd = (PyDict)a[2];
+                var names = new string[fd.Count];
+                var vals = new double[fd.Count][];
+                for (int i = 0; i < fd.Count; i++)
+                {
+                    names[i] = PyOps.Str(fd.Keys[i]);
+                    var vl = (PyList)fd.Values[i];
+                    var va = new double[vl.Count];
+                    for (int k = 0; k < va.Length; k++) va[k] = PyOps.ToDouble(vl.Items[k]);
+                    vals[i] = va;
+                }
+                string title = a.Length >= 4 ? PyOps.Str(a[3]) : "Sólido FEM 3D";
+                // pasa el VOLUMEN al visor: extrae piel en JS + SLIDER de corte en vivo (relleno)
+                string html = PythonViz.SolidClipViewer(nodes, elems.ToArray(), names, vals, title, "s3" + (++_vizId));
+                HtmlOut(html);
+                return null;
+            });
             Reg("len", (a, kw) => (long)PyLen(a[0]));
             Reg("range", (a, kw) =>
             {
@@ -1471,6 +1583,9 @@ namespace Calcpad.Core.Python
             Globals.Vars["True"] = true;
             Globals.Vars["False"] = false;
             Globals.Vars["None"] = null;
+            // El script de entrada corre como programa principal, igual que `python script.py`,
+            // para que `if __name__ == "__main__":` ejecute su bloque en el motor nativo.
+            Globals.Vars["__name__"] = "__main__";
         }
 
         private bool IsInstance(object obj, object cls)
@@ -1535,7 +1650,42 @@ namespace Calcpad.Core.Python
             PyDict d => d.Count,
             PySet st => st.Count,
             PyRange r => (int)r.Length,
+            PyNdArray nd => nd.Shape[0],          // numpy: len(array) = tamaño del primer eje
             _ => throw new PyRuntimeError("TypeError", $"object of type '{PyOps.TypeName(o)}' has no len()")
         };
+
+        // Extrae la PIEL (contorno) de una malla de VOLUMEN (tetraedros 4 idx / hexaedros 8 idx):
+        // caras compartidas por 2 elementos = internas (se descartan); las que aparecen 1 vez = piel
+        // exterior. Al filtrar elementos, la seccion cortada queda expuesta -> corte RELLENO sin huecos.
+        private static int[][] ExtractVolumeBoundary(List<int[]> elems)
+        {
+            int[][] TetF = { new[] { 0, 1, 2 }, new[] { 0, 1, 3 }, new[] { 0, 2, 3 }, new[] { 1, 2, 3 } };
+            int[][] HexF = { new[] { 0, 1, 2, 3 }, new[] { 4, 5, 6, 7 }, new[] { 0, 1, 5, 4 }, new[] { 1, 2, 6, 5 }, new[] { 2, 3, 7, 6 }, new[] { 3, 0, 4, 7 } };
+            var count = new Dictionary<string, int>();
+            var repr = new Dictionary<string, int[]>();
+            foreach (var el in elems)
+            {
+                int[][] fdefs = el.Length == 4 ? TetF : el.Length == 8 ? HexF : null;
+                if (fdefs == null) continue;
+                foreach (var fd in fdefs)
+                {
+                    var nodes = new int[fd.Length];
+                    for (int k = 0; k < fd.Length; k++) nodes[k] = el[fd[k]];
+                    var sorted = (int[])nodes.Clone(); System.Array.Sort(sorted);
+                    string key = string.Join("_", sorted);
+                    if (count.ContainsKey(key)) count[key]++;
+                    else { count[key] = 1; repr[key] = nodes; }
+                }
+            }
+            var tris = new List<int[]>();
+            foreach (var kv in count)
+                if (kv.Value == 1)
+                {
+                    var nd = repr[kv.Key];
+                    tris.Add(new[] { nd[0], nd[1], nd[2] });
+                    if (nd.Length == 4) tris.Add(new[] { nd[0], nd[2], nd[3] });   // quad -> 2 tris
+                }
+            return tris.ToArray();
+        }
     }
 }

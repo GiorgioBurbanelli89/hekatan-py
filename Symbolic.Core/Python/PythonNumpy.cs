@@ -1,5 +1,5 @@
 // =============================================================================
-// Calcpad Suite Py — numpy EMBEBIDO (nativo en C#)
+// Hekatan Python3 — numpy EMBEBIDO (nativo en C#)
 // =============================================================================
 //   Implementa `import numpy as np` SIN Python externo: una clase matriz
 //   (PyNdArray) + el módulo `numpy` con su API (array, zeros, eye, .T, @,
@@ -39,9 +39,11 @@ namespace Calcpad.Core.Python
 
     public sealed class PyNdArray
     {
-        public double[] Data;   // row-major
+        public double[] Data;   // row-major (parte real)
+        public double[] Imag;   // parte imaginaria (null = array real). Para FFT/complejos.
         public int[] Shape;     // longitud 1 (vector) o 2 (matriz)
         public bool IsInt;      // dtype entero (solo afecta display/lectura escalar)
+        public bool IsComplex => Imag != null;
 
         public int Ndim => Shape.Length;
         public int Rows => Shape[0];
@@ -261,12 +263,16 @@ namespace Calcpad.Core.Python
             Reg("matmul", (a, kw) => MatMul(a[0], a[1]));
             Reg("trace", (a, kw) => Trace(AsArr(a[0])));
             Reg("transpose", (a, kw) => AsArr(a[0]).Transpose());
-            Reg("diag", (a, kw) => Diag(AsArr(a[0])));
+            Reg("diag", (a, kw) => Diag(AsArr(a[0]), a.Length > 1 ? (int)PyOps.ToLong(a[1]) : 0));
             Reg("arange", (a, kw) => Arange(a));
             Reg("linspace", (a, kw) => Linspace(a, kw));
             Reg("sum", (a, kw) => Sum(AsArr(a[0])));
-            Reg("abs", (a, kw) => UFunc(a[0], Math.Abs));
-            Reg("absolute", (a, kw) => UFunc(a[0], Math.Abs));
+            Reg("abs", (a, kw) => CAbs(a[0]));
+            Reg("absolute", (a, kw) => CAbs(a[0]));
+            Reg("real", (a, kw) => { var z = AsArr(a[0]); return new PyNdArray((double[])z.Data.Clone(), (int[])z.Shape.Clone()); });
+            Reg("imag", (a, kw) => { var z = AsArr(a[0]); return new PyNdArray(z.Imag != null ? (double[])z.Imag.Clone() : new double[z.Size], (int[])z.Shape.Clone()); });
+            Reg("angle", (a, kw) => { var z = AsArr(a[0]); var r = new double[z.Size]; for (int i = 0; i < z.Size; i++) r[i] = Math.Atan2(z.Imag != null ? z.Imag[i] : 0, z.Data[i]); return new PyNdArray(r, (int[])z.Shape.Clone()); });
+            Reg("conj", (a, kw) => { var z = AsArr(a[0]); var im = z.Imag != null ? new double[z.Size] : null; if (im != null) for (int i = 0; i < z.Size; i++) im[i] = -z.Imag[i]; return new PyNdArray((double[])z.Data.Clone(), (int[])z.Shape.Clone()) { Imag = im }; });
             Reg("sqrt", (a, kw) => UFunc(a[0], Math.Sqrt));
             Reg("exp", (a, kw) => UFunc(a[0], Math.Exp));
             Reg("log", (a, kw) => UFunc(a[0], Math.Log));
@@ -320,6 +326,9 @@ namespace Calcpad.Core.Python
             // submódulo linalg
             var linalg = new PyModule("numpy.linalg");
             linalg.Attrs["solve"] = new PyBuiltin("solve", (a, kw) => Solve(AsArr(a[0]), AsArr(a[1])));
+            // spsolve(rows, cols, vals, b): resuelve sistema DISPERSO simetrico A*x=b (COO, escala FEM
+            // STKO/Abaqus) via Eigen SimplicialLDLT/SparseLU nativo. n = len(b).
+            linalg.Attrs["spsolve"] = new PyBuiltin("spsolve", (a, kw) => SpSolve(AsArr(a[0]), AsArr(a[1]), AsArr(a[2]), AsArr(a[3])));
             linalg.Attrs["norm"] = new PyBuiltin("norm", (a, kw) => Norm(AsArr(a[0])));
             linalg.Attrs["inv"] = new PyBuiltin("inv", (a, kw) => Inv(AsArr(a[0])));
             linalg.Attrs["det"] = new PyBuiltin("det", (a, kw) => Det(AsArr(a[0])));
@@ -328,6 +337,7 @@ namespace Calcpad.Core.Python
             linalg.Attrs["eig"] = new PyBuiltin("eig", (a, kw) => Eigh(AsArr(a[0])));          // simétrica: eig ≡ eigh
             linalg.Attrs["eigvals"] = new PyBuiltin("eigvals", (a, kw) => Eigvalsh(AsArr(a[0])));
             m.Attrs["linalg"] = linalg;
+            m.Attrs["fft"] = PythonFFT.Module("numpy.fft");   // FFT embebida
             return m;
         }
 
@@ -529,21 +539,74 @@ namespace Calcpad.Core.Python
         }
 
         // ── linalg.solve(A, b) → enchufa a OpenBLAS (DGESV) con fallback Gauss ──
+        // Resolver DISPERSO simetrico A*x=b desde COO (rows,cols,vals) via Eigen nativo (skyline ->
+        // SimplicialLDLT, fallback SparseLU). Escala a FEM grande (STKO/Abaqus) sin matriz densa.
+        public static PyNdArray SpSolve(PyNdArray rows, PyNdArray cols, PyNdArray vals, PyNdArray b)
+        {
+            int n = b.Size, nnz = rows.Size;
+            if (cols.Size != nnz || vals.Size != nnz)
+                throw new PyRuntimeError("ValueError", "spsolve: rows, cols, vals deben tener el mismo largo");
+            // ensambla (suma contribuciones) el triangulo SUPERIOR por fila: col >= fila
+            var rowUpper = new System.Collections.Generic.Dictionary<int, double>[n];
+            for (int i = 0; i < n; i++) rowUpper[i] = new System.Collections.Generic.Dictionary<int, double>();
+            for (int e = 0; e < nnz; e++)
+            {
+                int r = (int)rows.Data[e], c = (int)cols.Data[e];
+                if (r < 0 || r >= n || c < 0 || c >= n) continue;
+                if (r > c) continue;   // matriz simetrica: solo triangulo superior; el inferior es espejo (evita doblar)
+                rowUpper[r][c] = rowUpper[r].TryGetValue(c, out var ex) ? ex + vals.Data[e] : vals.Data[e];
+            }
+            // formato skyline del solver: por fila i, rowSizes[i] entradas contiguas desde la diagonal
+            var rowSizes = new int[n];
+            var valsList = new System.Collections.Generic.List<double>();
+            for (int i = 0; i < n; i++)
+            {
+                int maxc = i;
+                foreach (var kv in rowUpper[i]) if (kv.Key > maxc) maxc = kv.Key;
+                int size = maxc - i + 1; rowSizes[i] = size;
+                for (int k = 0; k < size; k++) valsList.Add(rowUpper[i].TryGetValue(i + k, out var vv) ? vv : 0.0);
+            }
+            var rhs = new double[n]; for (int i = 0; i < n; i++) rhs[i] = b.Data[i];
+            var sol = new double[n];
+            int info = EigenInterop.skyline_cholesky_solve(n, rowSizes, valsList.ToArray(), rhs, sol);
+            if (info < 0) throw new PyRuntimeError("RuntimeError", $"spsolve: el solver disperso fallo (info={info})");
+            return new PyNdArray(sol, new[] { n });
+        }
+
         public static object Solve(PyNdArray A, PyNdArray b)
         {
             if (A.Ndim != 2 || A.Rows != A.Cols)
                 throw new PyRuntimeError("ValueError", "solve: A debe ser cuadrada");
             int n = A.Rows;
-            if (b.Size != n) throw new PyRuntimeError("ValueError", "solve: dimensiones A·x=b no coinciden");
-            var Acopy = (double[])A.Data.Clone();
-            var bcopy = (double[])b.Data.Clone();
+            // b vector (n) -> x vector; b matriz (n×m) -> X matriz (resolver columna por columna, como numpy)
+            if (b.Ndim == 1 || b.Cols == 1)
+            {
+                if (b.Size != n) throw new PyRuntimeError("ValueError", "solve: dimensiones A·x=b no coinciden");
+                return new PyNdArray(SolveVec(A.Data, n, (double[])b.Data.Clone()), new[] { n });
+            }
+            if (b.Rows != n) throw new PyRuntimeError("ValueError", "solve: dimensiones A·x=b no coinciden");
+            int m = b.Cols;
+            var X = new double[n * m];
+            var col = new double[n];
+            for (int j = 0; j < m; j++)
+            {
+                for (int i = 0; i < n; i++) col[i] = b.Data[i * m + j];
+                var xj = SolveVec(A.Data, n, col);
+                for (int i = 0; i < n; i++) X[i * m + j] = xj[i];
+            }
+            return new PyNdArray(X, new[] { n, m });
+        }
+
+        // Resuelve A·x=b para UN vector b (LAPACK DGESV o Gauss). Clona internamente (destructivo).
+        private static double[] SolveVec(double[] Adata, int n, double[] bvec)
+        {
             double[] x = null;
             if (Calcpad.Core.LapackInterop.Available)
             {
-                try { x = Calcpad.Core.LapackInterop.Solve(n, Acopy, bcopy); } catch { x = null; }
+                try { x = Calcpad.Core.LapackInterop.Solve(n, (double[])Adata.Clone(), (double[])bvec.Clone()); } catch { x = null; }
             }
-            x ??= GaussSolve(n, (double[])A.Data.Clone(), (double[])b.Data.Clone());
-            return new PyNdArray(x, new[] { n });
+            x ??= GaussSolve(n, (double[])Adata.Clone(), (double[])bvec.Clone());
+            return x;
         }
 
         // Autovalores/autovectores de matriz simétrica (Eigen SelfAdjointEigenSolver).
@@ -636,11 +699,30 @@ namespace Calcpad.Core.Python
             for (int i = 0; i < n; i++) s += a.Data[i * a.Cols + i];
             return s;
         }
-        private static PyNdArray Diag(PyNdArray a)
+        private static PyNdArray Diag(PyNdArray a, int k = 0)
         {
-            if (a.Ndim == 1) { int n = a.Size; var d = new double[n * n]; for (int i = 0; i < n; i++) d[i * n + i] = a.Data[i]; return new PyNdArray(d, new[] { n, n }); }
-            int k = Math.Min(a.Rows, a.Cols); var v = new double[k]; for (int i = 0; i < k; i++) v[i] = a.Data[i * a.Cols + i];
-            return new PyNdArray(v, new[] { k });
+            if (a.Ndim == 1)
+            {
+                // vector -> matriz con v en la k-esima diagonal (k>0 superior, k<0 inferior). Tamaño n+|k|.
+                int n = a.Size, m = n + Math.Abs(k); var d = new double[m * m];
+                for (int i = 0; i < n; i++)
+                {
+                    int row = k >= 0 ? i : i - k;
+                    int col = k >= 0 ? i + k : i;
+                    d[row * m + col] = a.Data[i];
+                }
+                return new PyNdArray(d, new[] { m, m });
+            }
+            // matriz -> extrae la k-esima diagonal
+            var vals = new System.Collections.Generic.List<double>();
+            for (int i = 0; ; i++)
+            {
+                int row = k >= 0 ? i : i - k;
+                int col = k >= 0 ? i + k : i;
+                if (row >= a.Rows || col >= a.Cols) break;
+                vals.Add(a.Data[row * a.Cols + col]);
+            }
+            return new PyNdArray(vals.ToArray(), new[] { vals.Count });
         }
         private static object Sum(PyNdArray a) { double s = 0; foreach (var v in a.Data) s += v; return a.IsInt ? (object)(long)Math.Round(s) : s; }
         private static object Reduce(PyNdArray a, Func<double, double, double> f)
@@ -698,6 +780,14 @@ namespace Calcpad.Core.Python
             var a = AsArr(x);
             var d = new double[a.Data.Length];
             for (int i = 0; i < d.Length; i++) d[i] = f(a.Data[i]);
+            return new PyNdArray(d, (int[])a.Shape.Clone());
+        }
+        // abs consciente de complejos: |z| = sqrt(re²+im²)
+        private static object CAbs(object x)
+        {
+            if (PyOps.IsNumber(x)) return Math.Abs(PyOps.ToDouble(x));
+            var a = AsArr(x); var d = new double[a.Size];
+            for (int i = 0; i < a.Size; i++) d[i] = a.Imag != null ? Math.Sqrt(a.Data[i] * a.Data[i] + a.Imag[i] * a.Imag[i]) : Math.Abs(a.Data[i]);
             return new PyNdArray(d, (int[])a.Shape.Clone());
         }
 

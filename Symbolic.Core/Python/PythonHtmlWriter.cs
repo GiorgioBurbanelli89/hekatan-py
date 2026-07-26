@@ -1,5 +1,5 @@
 // =============================================================================
-// Calcpad Suite Py — Render de statements Python a HTML estilo Calcpad
+// Hekatan Python3 — Render de statements Python a HTML estilo Calcpad
 // =============================================================================
 //   Reutiliza las clases CSS de Calcpad (.eq, var, .mat, sub, sup) para que el
 //   reporte tenga el look de hoja de cálculo. No re-ejecuta nada: usa el AST y
@@ -8,6 +8,7 @@
 using System;
 using System.Net;
 using System.Text;
+using Markdig;
 
 namespace Calcpad.Core.Python
 {
@@ -23,6 +24,8 @@ namespace Calcpad.Core.Python
             string rest = text[0] == '#' ? text.Substring(1) : text;   // quitar UN '#'
             if (rest.StartsWith("'")) { content = rest.Substring(1); return "text"; }
             if (rest.StartsWith("\"")) { content = rest.Substring(1); return "heading"; }
+            if (rest.StartsWith("cp[")) return "cp-open";     // abre bloque Calcpad simbólico
+            if (rest.StartsWith("cp]")) return "cp-close";    // cierra bloque
             string t = rest.TrimStart();
             int sp = t.IndexOfAny(new[] { ' ', '\t' });
             string tok = sp < 0 ? t : t.Substring(0, sp);
@@ -33,6 +36,7 @@ namespace Calcpad.Core.Python
                 case "hide": content = after; return "hide";
                 case "noc": content = after; return "noc";
                 case "val": content = after; return "val";
+                case "cp": content = after; return "cp";     // inline: #cp <expr>
                 default: return "plain";
             }
         }
@@ -122,15 +126,92 @@ namespace Calcpad.Core.Python
 
         // Comentarios:  #'texto → texto (como `'` de Calcpad) ; #"texto → título (como `"`).
         // Cualquier otro comentario (# , ## , #show/#hide sueltos) NO se renderiza (paridad Python).
+        [ThreadStatic] private static bool _insideCp;
+        [ThreadStatic] private static System.Collections.Generic.List<string> _cpLines;
+        [ThreadStatic] private static Calcpad.Core.ExpressionParser _cpEp;
+
         private static string RenderComment(CommentStmt cs)
         {
             var kind = CommentKind(cs.Text, out var content);
             content = content.Trim();
+            if (kind == "cp-open") { _insideCp = true; _cpLines = new System.Collections.Generic.List<string>(); return string.Empty; }
+            if (kind == "cp-close")
+            {
+                _insideCp = false;
+                var code = string.Join("\n", _cpLines ?? new System.Collections.Generic.List<string>());
+                _cpLines = null;
+                return RenderCalcpadBlock(code);   // bloque = Calcpad COMPLETO evaluado ($Sum, $Product, #for/#loop, sqrt…)
+            }
+            if (_insideCp)                          // dentro de #cp[ … #cp]: acumular la línea (quitar el '#')
+            {
+                _cpLines?.Add(cs.Text.TrimStart('#'));
+                return string.Empty;
+            }
+            if (kind == "cp") return RenderCalcpadSymbolic(content);   // inline: simbólico (sin evaluar)
             if (kind == "heading")
                 return content.Length == 0 ? string.Empty : $"<h3>{WebUtility.HtmlEncode(content)}</h3>";
             if (kind == "text")
-                return content.Length == 0 ? string.Empty : WebUtility.HtmlEncode(content);
+                return content.Length == 0 ? string.Empty : RenderMarkdown(content);   // #' → Markdown
             return string.Empty;   // comentario normal → invisible (como en Python)
+        }
+
+        private static string CpBody(string html)
+        {
+            int b = html.IndexOf("<body", StringComparison.OrdinalIgnoreCase);
+            if (b >= 0)
+            {
+                int s = html.IndexOf('>', b) + 1;
+                int e = html.IndexOf("</body>", StringComparison.OrdinalIgnoreCase);
+                if (e > s) html = html.Substring(s, e - s);
+            }
+            // El ∂ (derivada parcial) sale en <i> (azul); lo pintamos morado como ∫/∑ (nary #C080F0).
+            return html.Trim().Replace("<i>∂</i>", "<i style=\"color:#C080F0\">∂</i>");
+        }
+
+        // #' → Markdown (Markdig, GFM: negrita **, cursiva *, tachado ~~, listas, tablas, task lists, links).
+        private static Markdig.MarkdownPipeline _mdPipe;
+        internal static string RenderMarkdown(string md)
+        {
+            try
+            {
+                _mdPipe ??= new Markdig.MarkdownPipelineBuilder()
+                    .UseEmphasisExtras().UseListExtras().UsePipeTables().UseGridTables().UseAutoLinks().UseTaskLists().Build();
+                string html = Markdig.Markdown.ToHtml(md, _mdPipe).Trim();
+                // Las tablas markdown salen sin clase → sin bordes. Marcarlas `.bordered`
+                // para heredar el estilo de tabla del worksheet (header con fondo + celdas con borde).
+                html = html.Replace("<table>", "<table class=\"bordered\">");
+                if (html.StartsWith("<p>", StringComparison.Ordinal) && html.EndsWith("</p>", StringComparison.Ordinal)
+                    && html.IndexOf("<p>", 3, StringComparison.Ordinal) < 0)
+                    return html.Substring(3, html.Length - 7);   // inline (un párrafo) → sin wrapper <p>
+                return html;
+            }
+            catch { return WebUtility.HtmlEncode(md); }
+        }
+
+        // #cp inline → fórmula simbólica (SIN evaluar), vía #sym (AngouriMath): sqrt→√, subíndices, fracciones.
+        private static string RenderCalcpadSymbolic(string expr)
+        {
+            if (string.IsNullOrWhiteSpace(expr)) return string.Empty;
+            try
+            {
+                _cpEp ??= new Calcpad.Core.ExpressionParser();
+                _cpEp.Parse("#sym " + expr, calculate: true, getXml: true);
+                return CpBody(_cpEp.HtmlResult ?? "");
+            }
+            catch { return WebUtility.HtmlEncode(expr); }
+        }
+
+        // #cp[ … #cp] bloque → Calcpad COMPLETO evaluado: $Sum{f @ k=a:b}, $Product, #for/#loop, sqrt→√, subíndices, fracciones.
+        private static string RenderCalcpadBlock(string code)
+        {
+            if (string.IsNullOrWhiteSpace(code)) return string.Empty;
+            try
+            {
+                _cpEp ??= new Calcpad.Core.ExpressionParser();
+                _cpEp.Parse(code, calculate: true, getXml: true);
+                return CpBody(_cpEp.HtmlResult ?? "");
+            }
+            catch { return WebUtility.HtmlEncode(code); }
         }
 
         // ── Target de asignación ──
@@ -200,15 +281,15 @@ namespace Calcpad.Core.Python
                 if (all2d)
                 {
                     var sbm = new StringBuilder();
-                    sbm.Append("<span class=\"mat\"><span class=\"lb\"></span><span class=\"cells\">");
+                    ClassicMatrixOpen(sbm);
                     foreach (var row in rows)
                     {
-                        sbm.Append("<span class=\"row\">");
+                        sbm.Append("<span class=\"tr\"><span class=\"td\"></span>");
                         foreach (var c in row)
-                            sbm.Append("<span class=\"cell\">").Append(WebUtility.HtmlEncode(PyOps.Str(c))).Append("</span>");
-                        sbm.Append("</span>");
+                            sbm.Append("<span class=\"td\">").Append(WebUtility.HtmlEncode(PyOps.Str(c))).Append("</span>");
+                        sbm.Append("<span class=\"td\"></span></span>");
                     }
-                    sbm.Append("</span><span class=\"rb\"></span></span>");
+                    sbm.Append("</span>");
                     return sbm.ToString();
                 }
             }
@@ -223,16 +304,17 @@ namespace Calcpad.Core.Python
                 return WebUtility.HtmlEncode(sb0.ToString());
             }
             var sb = new StringBuilder();
-            sb.Append("<span class=\"mat\"><span class=\"lb\"></span><span class=\"cells\"><span class=\"row\">");
+            ClassicMatrixOpen(sb);
+            sb.Append("<span class=\"tr\"><span class=\"td\"></span>");
             foreach (var x in items)
-            {
-                sb.Append("<span class=\"cell\">");
-                sb.Append(WebUtility.HtmlEncode(PyOps.Str(x)));
-                sb.Append("</span>");
-            }
-            sb.Append("</span></span><span class=\"rb\"></span></span>");
+                sb.Append("<span class=\"td\">").Append(WebUtility.HtmlEncode(PyOps.Str(x))).Append("</span>");
+            sb.Append("<span class=\"td\"></span></span></span>");
             return sb.ToString();
         }
+
+        // Abre el markup de matriz CLÁSICO de Calcpad (.matrix inline-table, corchetes = borde de
+        // celda vacía primera/última) — mismo estilo AJUSTADO que Calcpad Suite/VM/Symbolic.
+        private static void ClassicMatrixOpen(StringBuilder sb) => sb.Append("<span class=\"matrix\">");
 
         // numpy.ndarray → matriz .eq (con truncado: matrices grandes muestran solo el shape).
         private static string NdToHtml(PyNdArray a)
@@ -244,16 +326,16 @@ namespace Calcpad.Core.Python
                 ? ((long)System.Math.Round(v)).ToString(System.Globalization.CultureInfo.InvariantCulture)
                 : PyOps.Str(v));
             var sb = new StringBuilder();
-            sb.Append("<span class=\"mat\"><span class=\"lb\"></span><span class=\"cells\">");
+            ClassicMatrixOpen(sb);
             int rows = a.Ndim == 1 ? 1 : a.Rows, cols = a.Ndim == 1 ? a.Size : a.Cols;
             for (int i = 0; i < rows; i++)
             {
-                sb.Append("<span class=\"row\">");
+                sb.Append("<span class=\"tr\"><span class=\"td\"></span>");
                 for (int j = 0; j < cols; j++)
-                    sb.Append("<span class=\"cell\">").Append(Cell(a.Data[i * cols + j])).Append("</span>");
-                sb.Append("</span>");
+                    sb.Append("<span class=\"td\">").Append(Cell(a.Data[i * cols + j])).Append("</span>");
+                sb.Append("<span class=\"td\"></span></span>");
             }
-            sb.Append("</span><span class=\"rb\"></span></span>");
+            sb.Append("</span>");
             return sb.ToString();
         }
 

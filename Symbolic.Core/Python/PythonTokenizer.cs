@@ -1,5 +1,5 @@
 // =============================================================================
-// Calcpad Suite Py — Python Tokenizer (indentation-aware)
+// Hekatan Python3 — Python Tokenizer (indentation-aware)
 // =============================================================================
 //   Convierte código Python en tokens, emitiendo INDENT/DEDENT como hace
 //   CPython. Maneja:
@@ -94,12 +94,27 @@ namespace Calcpad.Core.Python
                         i = j + 1;
                         continue;
                     }
-                    // Línea sólo-comentario → no afecta indentación, pero se emite.
+                    // Línea sólo-comentario → normalmente no afecta indentación, pero se emite.
                     if (src[j] == '#')
                     {
                         int k = j;
                         while (k < n && src[k] != '\n') k++;
-                        toks.Add(new PyToken { Type = PyTok.Comment, Text = src.Substring(j, k - j), Line = line, Col = Col(j) });
+                        var ctext = src.Substring(j, k - j);
+                        // Un comentario de MARKUP (#' #" #hide #show #cp) a MENOR indentación que el
+                        // bloque actual debe DEDENTAR: si no, un for/def previo lo absorbe en su cuerpo
+                        // (los comentarios no dedentan) y el heading/toggle nunca llega al render.
+                        // Los comentarios normales (# ...) siguen sin afectar la indentación (seguro).
+                        var cbody = ctext.Length > 1 ? ctext.Substring(1).TrimStart() : "";
+                        bool isMarkup = ctext.StartsWith("#'") || ctext.StartsWith("#\"")
+                                        || cbody.StartsWith("hide") || cbody.StartsWith("show")
+                                        || cbody.StartsWith("cp");
+                        if (isMarkup)
+                            while (indent < indents.Peek())
+                            {
+                                indents.Pop();
+                                toks.Add(new PyToken { Type = PyTok.Dedent, Text = "", Line = line, Col = Col(j) });
+                            }
+                        toks.Add(new PyToken { Type = PyTok.Comment, Text = ctext, Line = line, Col = Col(j) });
                         toks.Add(new PyToken { Type = PyTok.Newline, Text = "\n", Line = line, Col = Col(k) });
                         if (k < n) { line++; colBase = k + 1; }
                         i = k + 1;

@@ -1,13 +1,13 @@
-; Inno Setup Script para Calcpad Suite Py
+; Inno Setup Script para Hekatan Python3
 ; Genera un instalador setup.exe
 ; Variante Python-only: motor Python nativo en C# + fallback a python real.
 
-#define MyAppName "Calcpad Suite Py"
-#define MyAppVersion "1.0.10"
+#define MyAppName "Hekatan Python3"
+#define MyAppVersion "1.0.11"
 #define MyAppPublisher "Jorge Burbano"
 #define MyAppURL "https://github.com/GiorgioBurbanelli89/Calcpad-Suite-Py"
-#define MyAppExeName "CalcpadSuitePy.exe"
-#define MyAppPublishDir "C:\Users\j-b-j\Desktop\CalcpadSuitePy-Installer\CalcpadSuitePy"
+#define MyAppExeName "HekatanPython3.exe"
+#define MyAppPublishDir "C:\Users\j-b-j\Desktop\HekatanPython3-Installer\HekatanPython3"
 
 [Setup]
 AppId={{F1E2D3C4-B5A6-4789-9C0D-1E2F3A4B5C6D}
@@ -17,12 +17,12 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
-DefaultDirName={autopf}\Calcpad Suite Py
-DefaultGroupName=Calcpad Suite Py
+DefaultDirName={autopf}\Hekatan Python3
+DefaultGroupName=Hekatan Python3
 AllowNoIcons=yes
 LicenseFile=LICENSE
 OutputDir=.\Installer
-OutputBaseFilename=CalcpadSuitePy-Setup-{#MyAppVersion}
+OutputBaseFilename=HekatanPython3-Setup-{#MyAppVersion}
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
@@ -36,7 +36,7 @@ Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
-Name: "fileassoc_py"; Description: "Asociar archivos .py (Python) con Calcpad Suite Py"; GroupDescription: "Asociaciones de archivo:"
+Name: "fileassoc_py"; Description: "Asociar archivos .py (Python) con Hekatan Python3"; GroupDescription: "Asociaciones de archivo:"
 
 [InstallDelete]
 ; Limpiar Examples viejos antes de copiar — evita .py huérfanos de versiones anteriores.
@@ -62,10 +62,10 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Registry]
 ; .py file association
-Root: HKA; Subkey: "Software\Classes\.py\OpenWithProgids"; ValueType: string; ValueName: "CalcpadSuitePy.PyFile"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc_py
-Root: HKA; Subkey: "Software\Classes\CalcpadSuitePy.PyFile"; ValueType: string; ValueName: ""; ValueData: "Calcpad Suite Py — Python Document"; Flags: uninsdeletekey; Tasks: fileassoc_py
-Root: HKA; Subkey: "Software\Classes\CalcpadSuitePy.PyFile\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"; Tasks: fileassoc_py
-Root: HKA; Subkey: "Software\Classes\CalcpadSuitePy.PyFile\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: fileassoc_py
+Root: HKA; Subkey: "Software\Classes\.py\OpenWithProgids"; ValueType: string; ValueName: "HekatanPython3.PyFile"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc_py
+Root: HKA; Subkey: "Software\Classes\HekatanPython3.PyFile"; ValueType: string; ValueName: ""; ValueData: "Hekatan Python3 — Python Document"; Flags: uninsdeletekey; Tasks: fileassoc_py
+Root: HKA; Subkey: "Software\Classes\HekatanPython3.PyFile\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"; Tasks: fileassoc_py
+Root: HKA; Subkey: "Software\Classes\HekatanPython3.PyFile\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: fileassoc_py
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "Iniciar Calcpad Suite Py"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Description: "Iniciar Hekatan Python3"; Flags: nowait postinstall skipifsilent

@@ -8,15 +8,15 @@
     <StartupObject>Calcpad.Wpf.App</StartupObject>
     <ApplicationIcon>resources\calcpad.ico</ApplicationIcon>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
-    <Authors>Giorgio Burbanelli (Calcpad Suite Py fork) — original: Nedelcho Ganchovski</Authors>
+    <Authors>Giorgio Burbanelli (Hekatan Python3 fork) — original: Nedelcho Ganchovski</Authors>
     <RootNamespace>Calcpad.Wpf</RootNamespace>
     <Platforms>AnyCPU</Platforms>
 		<Version>1.0.0</Version>
 		<Company>Hekatan</Company>
-    <PackageId>CalcpadSuitePy</PackageId>
-    <Product>Calcpad Suite Py</Product>
-    <AssemblyName>CalcpadSuitePy</AssemblyName>
-    <AssemblyTitle>Calcpad Suite Py — Python-syntax scientific worksheets</AssemblyTitle>
+    <PackageId>HekatanPython3</PackageId>
+    <Product>Hekatan Python3</Product>
+    <AssemblyName>HekatanPython3</AssemblyName>
+    <AssemblyTitle>Hekatan Python3 — Python-syntax scientific worksheets</AssemblyTitle>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
   </PropertyGroup>
 
@@ -37,7 +37,7 @@
   
   <ItemGroup>
     <!-- Ejemplos Python curados (Examples-Py) → se copian a {output}\Examples
-         para que la app los sincronice a MyDocuments\Calcpad Suite Py\Examples
+         para que la app los sincronice a MyDocuments\Hekatan Python3\Examples
          en el primer arranque. -->
     <Content Include="..\Examples-Py\**\*.py"
              Link="Examples\%(RecursiveDir)%(Filename)%(Extension)"
