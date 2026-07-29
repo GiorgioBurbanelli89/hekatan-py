@@ -472,7 +472,26 @@ namespace Calcpad.Core.Python
                 case IndexExpr ix:
                 {
                     var obj = Eval(ix.Target, scope);
-                    if (obj is PyNdArray nd) { nd.Set(NdSpecs(ix.Index, scope), value); break; }   // A[i,j]=, A[i,:]=
+                    if (obj is PyNdArray nd)
+                    {
+                        // indexado avanzado en asignacion: A[np.ix_(r,c)]=block , A[intarray]=vec
+                        if (!(ix.Index is SliceExpr) && !(ix.Index is TupleLit))
+                        {
+                            var iv2 = Eval(ix.Index, scope);
+                            if (iv2 is PyIxGrid gg) { nd.SetSubmatrix(gg.Rows, gg.Cols, value); break; }
+                            if (iv2 is PyNdArray ia2 && ia2.Ndim == 1 && ia2.IsInt) { nd.Scatter(ToIntArr(ia2), value); break; }
+                            nd.Set(new List<NdSpec> { new NdSpec { Slice = false, Idx = PyOps.ToLong(iv2) } }, value); break;
+                        }
+                        nd.Set(NdSpecs(ix.Index, scope), value); break;   // A[i,j]=, A[i,:]=
+                    }
+                    if (obj is PySparseMatrix sm)   // K[np.ix_(r,c)]=block , K[i,j]=v (ensamblaje FEM)
+                    {
+                        if (ix.Index is TupleLit stl && stl.Elements.Count == 2)
+                        { PythonScipy.SpSetBlock(sm, SpAxis(stl.Elements[0], scope, sm.Rows), SpAxis(stl.Elements[1], scope, sm.Cols), value); break; }
+                        var iv3 = Eval(ix.Index, scope);
+                        if (iv3 is PyIxGrid gg3) { PythonScipy.SpSetBlock(sm, gg3.Rows, gg3.Cols, value); break; }
+                        PythonScipy.SpSetBlock(sm, new[] { (int)PyOps.ToLong(iv3) }, AllIdx(sm.Cols), value); break;
+                    }
                     var idx = Eval(ix.Index, scope);
                     SetItem(obj, idx, value);
                     break;
@@ -663,10 +682,31 @@ namespace Calcpad.Core.Python
                 }
                 return nd.Get(NdSpecs(ix.Index, scope));   // A[i], A[i,j], A[i,:]
             }
+            if (obj is PySparseMatrix sm)   // K[np.ix_(r,c)] (bloque) , K[rows] , K[:,cols] (submatriz)
+            {
+                if (ix.Index is TupleLit tl2 && tl2.Elements.Count == 2)
+                    return PythonScipy.SpSubmat(sm, SpAxis(tl2.Elements[0], scope, sm.Rows), SpAxis(tl2.Elements[1], scope, sm.Cols));
+                var iv = Eval(ix.Index, scope);
+                if (iv is PyIxGrid g) return PythonScipy.SpBlock(sm, g.Rows, g.Cols);
+                if (iv is PyNdArray ra) return PythonScipy.SpSubmat(sm, ToIntArr(ra), AllIdx(sm.Cols));
+                return PythonScipy.SpSubmat(sm, new[] { (int)PyOps.ToLong(iv) }, AllIdx(sm.Cols));
+            }
             if (ix.Index is SliceExpr sl) return GetSlice(obj, sl, scope);
             var idx = Eval(ix.Index, scope);
             return GetItem(obj, idx);
         }
+
+        // Resuelve un eje de indice sparse: ':' -> todos; array int -> esos indices; escalar -> [i].
+        private int[] SpAxis(PyNode node, PyScope scope, int dim)
+        {
+            if (node is SliceExpr) return AllIdx(dim);
+            var v = Eval(node, scope);
+            if (v is PyIxGrid) throw new PyRuntimeError("IndexError", "np.ix_ dentro de tupla no soportado");
+            if (v is PyNdArray a) return ToIntArr(a);
+            return new[] { (int)PyOps.ToLong(v) };
+        }
+        private static int[] AllIdx(int n) { var r = new int[n]; for (int i = 0; i < n; i++) r[i] = i; return r; }
+        private static int[] ToIntArr(PyNdArray a) { var r = new int[a.Data.Length]; for (int k = 0; k < r.Length; k++) r[k] = (int)Math.Round(a.Data[k]); return r; }
 
         // Convierte el nodo índice (entero, tupla, slice) en specs para PyNdArray.
         private List<NdSpec> NdSpecs(PyNode node, PyScope scope)

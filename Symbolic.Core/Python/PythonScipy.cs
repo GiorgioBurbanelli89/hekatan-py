@@ -6,16 +6,30 @@ using System.Collections.Generic;
 
 namespace Calcpad.Core.Python
 {
-    // Matriz DISPERSA (scipy.sparse) — almacenamiento COO (rows, cols, vals) + shape.
+    // Matriz DISPERSA (scipy.sparse) — COO (rows, cols, vals) + shape. Para ENSAMBLAJE FEM
+    // (lil/dok) usa un diccionario (clave = r*Cols+c) que da O(1) por entrada en K[ix]=v / K[ix]+=v;
+    // se materializa a COO (R,C,V) al resolver / convertir a csr.
     public sealed class PySparseMatrix
     {
         public int Rows, Cols;
         public int[] R, C;
         public double[] V;
         public string Format;
+        public Dictionary<long, double> Dok;      // != null => almacenamiento por diccionario (lil/dok)
         public PySparseMatrix(int rows, int cols, int[] r, int[] c, double[] v, string fmt)
         { Rows = rows; Cols = cols; R = r; C = c; V = v; Format = fmt; }
-        public int Nnz => V.Length;
+        public PySparseMatrix(int rows, int cols, string fmt)   // vacia, backing DOK (para ensamblaje)
+        { Rows = rows; Cols = cols; R = System.Array.Empty<int>(); C = System.Array.Empty<int>(); V = System.Array.Empty<double>(); Format = fmt; Dok = new Dictionary<long, double>(); }
+        public int Nnz => Dok != null ? Dok.Count : V.Length;
+        public long Key(int r, int c) => (long)r * Cols + c;
+        /// <summary>Materializa el DOK a arreglos COO (R,C,V). Idempotente.</summary>
+        public void Materialize()
+        {
+            if (Dok == null) return;
+            int n = Dok.Count; var r = new int[n]; var c = new int[n]; var v = new double[n]; int k = 0;
+            foreach (var kv in Dok) { r[k] = (int)(kv.Key / Cols); c[k] = (int)(kv.Key % Cols); v[k] = kv.Value; k++; }
+            R = r; C = c; V = v; Dok = null;
+        }
     }
 
     internal static class PythonScipy
@@ -150,6 +164,8 @@ namespace Calcpad.Core.Python
         // Despacho de atributos/métodos de una matriz dispersa (A.shape, A.nnz, A.toarray(), A.dot(x), A.T).
         public static object GetAttr(PySparseMatrix m, string name)
         {
+            // shape/nnz/format no requieren materializar; el resto lee R/C/V.
+            if (name != "shape" && name != "nnz" && name != "format") m.Materialize();
             switch (name)
             {
                 case "shape": return new PyTuple(new List<object> { (long)m.Rows, (long)m.Cols });
@@ -168,6 +184,12 @@ namespace Calcpad.Core.Python
         // ---- constructores sparse ----
         private static object MakeSparse(object[] a, PyDict kw, string fmt)
         {
+            // conversion entre formatos: csr_matrix(lil) / csc_matrix(coo) / etc. Materializa el DOK y reetiqueta.
+            if (a[0] is PySparseMatrix src)
+            {
+                src.Materialize();
+                return new PySparseMatrix(src.Rows, src.Cols, (int[])src.R.Clone(), (int[])src.C.Clone(), (double[])src.V.Clone(), fmt);
+            }
             // forma scipy: M((data, (row, col)), shape=(m,n))
             if (a[0] is PyTuple t && t.Items.Count == 2 && t.Items[1] is PyTuple ij && ij.Items.Count == 2)
             {
@@ -186,10 +208,11 @@ namespace Calcpad.Core.Python
                 for (int i = 0; i < nd.Rows; i++) for (int j = 0; j < nd.Cols; j++) { double v = nd.Data[i * nd.Cols + j]; if (v != 0) { R.Add(i); C.Add(j); V.Add(v); } }
                 return new PySparseMatrix(nd.Rows, nd.Cols, R.ToArray(), C.ToArray(), V.ToArray(), fmt);
             }
-            // forma vacía: M((m, n))
+            // forma vacía: M((m, n))  → lil/dok se respaldan con diccionario (ensamblaje O(1))
             if (a[0] is PyTuple mn && mn.Items.Count == 2)
             {
                 int m2 = (int)PyOps.ToLong(mn.Items[0]), n2 = (int)PyOps.ToLong(mn.Items[1]);
+                if (fmt == "lil" || fmt == "dok" || fmt == "coo") return new PySparseMatrix(m2, n2, fmt);   // DOK backing
                 return new PySparseMatrix(m2, n2, new int[0], new int[0], new double[0], fmt);
             }
             throw new PyRuntimeError("TypeError", $"{fmt}_matrix: forma no soportada (usa (data,(row,col)) o array 2D)");
@@ -234,15 +257,60 @@ namespace Calcpad.Core.Python
             return new PySparseMatrix(n, n, R.ToArray(), C.ToArray(), V.ToArray(), "coo");
         }
 
+        // ================= indexado sparse (getitem / setitem para ensamblaje FEM) =================
+        // K[np.ix_(r,c)] (bloque denso), K[rows] / K[:,cols] (submatriz), K[np.ix_(r,c)]=block (overwrite).
+        private static Dictionary<long, double> CooMap(PySparseMatrix m)
+        {
+            var map = new Dictionary<long, double>();
+            for (int k = 0; k < m.V.Length; k++) { var key = m.Key(m.R[k], m.C[k]); map.TryGetValue(key, out var cur); map[key] = cur + m.V[k]; }
+            return map;
+        }
+        /// <summary>Bloque denso m[rows x cols] (0 donde no hay entrada). Para el load del `+=`.</summary>
+        public static PyNdArray SpBlock(PySparseMatrix m, int[] rows, int[] cols)
+        {
+            int nr = rows.Length, nc = cols.Length; var d = new double[nr * nc];
+            var dok = m.Dok ?? CooMap(m);
+            for (int i = 0; i < nr; i++) for (int j = 0; j < nc; j++)
+                if (dok.TryGetValue(m.Key(rows[i], cols[j]), out var vv)) d[i * nc + j] = vv;
+            return new PyNdArray(d, new[] { nr, nc });
+        }
+        /// <summary>Sobrescribe el bloque m[rows x cols] = value (usa DOK; convierte COO->DOK si hace falta).</summary>
+        public static void SpSetBlock(PySparseMatrix m, int[] rows, int[] cols, object value)
+        {
+            if (m.Dok == null) m.Dok = CooMap(m);
+            var blk = Arr(value); int nc = cols.Length;
+            bool scalar = blk.Data.Length == 1;
+            for (int i = 0; i < rows.Length; i++) for (int j = 0; j < cols.Length; j++)
+                m.Dok[m.Key(rows[i], cols[j])] = scalar ? blk.Data[0] : blk.Data[i * nc + j];
+        }
+        /// <summary>Submatriz m[rows, cols] (rows/cols == null => todos). Remapea a 0..len. Devuelve COO.</summary>
+        public static PySparseMatrix SpSubmat(PySparseMatrix m, int[] rows, int[] cols)
+        {
+            m.Materialize();
+            int nr = rows == null ? m.Rows : rows.Length, nc = cols == null ? m.Cols : cols.Length;
+            int[] rinv = null, cinv = null;
+            if (rows != null) { rinv = new int[m.Rows]; for (int i = 0; i < m.Rows; i++) rinv[i] = -1; for (int i = 0; i < rows.Length; i++) rinv[rows[i]] = i; }
+            if (cols != null) { cinv = new int[m.Cols]; for (int i = 0; i < m.Cols; i++) cinv[i] = -1; for (int i = 0; i < cols.Length; i++) cinv[cols[i]] = i; }
+            var R = new List<int>(); var C = new List<int>(); var V = new List<double>();
+            for (int k = 0; k < m.V.Length; k++)
+            {
+                int nr2 = rinv == null ? m.R[k] : rinv[m.R[k]];
+                int nc2 = cinv == null ? m.C[k] : cinv[m.C[k]];
+                if (nr2 >= 0 && nc2 >= 0) { R.Add(nr2); C.Add(nc2); V.Add(m.V[k]); }
+            }
+            return new PySparseMatrix(nr, nc, R.ToArray(), C.ToArray(), V.ToArray(), m.Format);
+        }
+
         // ---- sparse solve (via el spsolve de numpy: Eigen skyline) ----
         private static object SpSolve(object A, object b)
         {
             if (A is PySparseMatrix m)
             {
-                var R = new double[m.Nnz]; var C = new double[m.Nnz];
-                for (int e = 0; e < m.Nnz; e++) { R[e] = m.R[e]; C[e] = m.C[e]; }
-                return PyNumpy.SpSolve(new PyNdArray(R, new[] { m.Nnz }), new PyNdArray(C, new[] { m.Nnz }),
-                                       new PyNdArray((double[])m.V.Clone(), new[] { m.Nnz }), Arr(b));
+                m.Materialize();
+                // El solver skyline nativo es Cholesky (SIMETRICO SPD) y daba resultados erroneos
+                // (formato). El tangente D-P no-asociado del FEM es ademas NO simetrico. Ruta CORRECTA:
+                // densificar + LU GENERAL. (Sparse-LU nativo rapido = follow-up: exponer SparseLU del C++.)
+                return PyNumpy.Solve((PyNdArray)ToDense(m), Arr(b));
             }
             // A densa → solve denso
             return PyNumpy.Solve(Arr(A), Arr(b));

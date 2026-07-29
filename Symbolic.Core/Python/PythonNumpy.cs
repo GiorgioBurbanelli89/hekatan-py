@@ -142,6 +142,23 @@ namespace Calcpad.Core.Python
             return new PyNdArray(res.ToArray(), new[] { res.Count }, IsInt);
         }
 
+        // ── escritura avanzada: A[np.ix_(r,c)] = block , A[intarray] = vec (scatter) ──
+        public void SetSubmatrix(int[] rows, int[] cols, object value)
+        {
+            int nr = rows.Length, nc = cols.Length;
+            if (value is PyNdArray b && b.Data.Length == nr * nc)
+                for (int i = 0; i < nr; i++) for (int j = 0; j < nc; j++)
+                    Data[Norm(rows[i], Rows) * Cols + Norm(cols[j], Cols)] = b.Data[i * nc + j];
+            else { double v = PyOps.ToDouble(value); for (int i = 0; i < nr; i++) for (int j = 0; j < nc; j++) Data[Norm(rows[i], Rows) * Cols + Norm(cols[j], Cols)] = v; }
+        }
+        public void Scatter(int[] idx, object value)
+        {
+            int n = Shape[0];
+            if (value is PyNdArray b && b.Data.Length == idx.Length)
+                for (int k = 0; k < idx.Length; k++) Data[Norm(idx[k], n)] = b.Data[k];
+            else { double v = PyOps.ToDouble(value); for (int k = 0; k < idx.Length; k++) Data[Norm(idx[k], n)] = v; }
+        }
+
         // ── escritura A[...] = value ──
         public void Set(List<NdSpec> s, object value)
         {
@@ -281,7 +298,8 @@ namespace Calcpad.Core.Python
             Reg("tan", (a, kw) => UFunc(a[0], Math.Tan));
             Reg("floor", (a, kw) => UFunc(a[0], Math.Floor));
             Reg("ceil", (a, kw) => UFunc(a[0], Math.Ceiling));
-            Reg("round", (a, kw) => UFunc(a[0], v => Math.Round(v, MidpointRounding.ToEven)));
+            Reg("round", (a, kw) => RoundTo(a, kw));
+            Reg("around", (a, kw) => RoundTo(a, kw));
             Reg("sign", (a, kw) => UFunc(a[0], v => (double)Math.Sign(v)));
             Reg("deg2rad", (a, kw) => UFunc(a[0], v => v * Math.PI / 180.0));
             Reg("rad2deg", (a, kw) => UFunc(a[0], v => v * 180.0 / Math.PI));
@@ -603,10 +621,28 @@ namespace Calcpad.Core.Python
             double[] x = null;
             if (Calcpad.Core.LapackInterop.Available)
             {
-                try { x = Calcpad.Core.LapackInterop.Solve(n, (double[])Adata.Clone(), (double[])bvec.Clone()); } catch { x = null; }
+                try
+                {
+                    var xl = Calcpad.Core.LapackInterop.Solve(n, (double[])Adata.Clone(), (double[])bvec.Clone());
+                    if (ResidualOk(Adata, n, xl, bvec)) x = xl;   // VERIFICA: LAPACK nativo dio resultados erroneos; validar ‖Ax-b‖
+                }
+                catch { x = null; }
             }
-            x ??= GaussSolve(n, (double[])Adata.Clone(), (double[])bvec.Clone());
+            x ??= GaussSolve(n, (double[])Adata.Clone(), (double[])bvec.Clone());   // fallback correcto (Gauss con pivoteo)
             return x;
+        }
+
+        /// <summary>Verifica ‖A·x − b‖ <= tol·(1+‖b‖). A es row-major (Adata[i*n+j]).</summary>
+        private static bool ResidualOk(double[] A, int n, double[] x, double[] b)
+        {
+            if (x == null || x.Length != n) return false;
+            double res = 0, nb = 0;
+            for (int i = 0; i < n; i++)
+            {
+                double s = 0; for (int j = 0; j < n; j++) s += A[i * n + j] * x[j];
+                double e = s - b[i]; res += e * e; nb += b[i] * b[i];
+            }
+            return Math.Sqrt(res) <= 1e-7 * (1.0 + Math.Sqrt(nb));
         }
 
         // Autovalores/autovectores de matriz simétrica (Eigen SelfAdjointEigenSolver).
@@ -772,6 +808,18 @@ namespace Calcpad.Core.Python
                 outer.Items.Add(row);
             }
             return outer;
+        }
+
+        // np.round(a, decimals=0) — HONRA decimals (antes lo ignoraba, redondeaba a entero).
+        private static object RoundTo(object[] a, PyDict kw)
+        {
+            int dec = 0;
+            if (a.Length > 1 && a[1] != null) dec = (int)PyOps.ToLong(a[1]);
+            else if (kw != null && kw.TryGet("decimals", out var dv)) dec = (int)PyOps.ToLong(dv);
+            Func<double, double> f;
+            if (dec >= 0 && dec <= 15) f = v => Math.Round(v, dec, MidpointRounding.ToEven);
+            else { double p = Math.Pow(10.0, dec); f = v => Math.Round(v * p, MidpointRounding.ToEven) / p; }  // decimals negativos
+            return UFunc(a[0], f);
         }
 
         private static object UFunc(object x, Func<double, double> f)
