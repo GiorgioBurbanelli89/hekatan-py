@@ -80,8 +80,12 @@ namespace Calcpad.Core.Python
         }
 
         // ── Comparación de orden (<,>,<=,>=) ──
+        // ndarray de 1 elemento -> escalar (numpy permite comparar arrays de tamano 1 como escalar)
+        private static object UnwrapScalar(object x) => (x is PyNdArray nd && nd.Data != null && nd.Data.Length == 1) ? (object)nd.Data[0] : x;
+
         public static int Compare(object a, object b)
         {
+            a = UnwrapScalar(a); b = UnwrapScalar(b);
             if (IsNumber(a) && IsNumber(b)) return ToDouble(a).CompareTo(ToDouble(b));
             if (a is string sa && b is string sb) return string.CompareOrdinal(sa, sb);
             if (a is PyList la && b is PyList lb) return SeqCompare(la.Items, lb.Items);

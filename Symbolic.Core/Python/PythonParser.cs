@@ -315,6 +315,12 @@ namespace Calcpad.Core.Python
         {
             ExpectOp(":");
             var body = new List<PyNode>();
+            // Comentario INLINE tras ':' (def f():  # nota / if x:  # nota) -> preservar y continuar al bloque.
+            while (Cur.Type == PyTok.Comment)
+            {
+                body.Add(new CommentStmt { Text = Cur.Text, IsInline = true, Line = Cur.Line });
+                _p++;
+            }
             if (Cur.Type == PyTok.Newline)
             {
                 _p++; // newline

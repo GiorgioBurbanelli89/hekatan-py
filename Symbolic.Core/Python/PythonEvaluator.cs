@@ -46,7 +46,7 @@ namespace Calcpad.Core.Python
         private TclInterop _opensees;   // intérprete OpenSees nativo (MKL Pardiso+JIT), creado on-demand
 
         private static readonly HashSet<string> NativeModules = new(StringComparer.Ordinal)
-        { "math", "cmath", "openseespy", "opensees", "openseespywin", "numpy", "scipy" };
+        { "math", "cmath", "openseespy", "opensees", "openseespywin", "numpy", "scipy", "sys", "time", "os", "collections" };
 
         public PythonEvaluator()
         {
@@ -65,6 +65,14 @@ namespace Calcpad.Core.Python
             return true;
         }
 
+        // ¿Existe <dir_script>/<name>.py? -> importable NATIVAMENTE como modulo local (no fuerza subprocess).
+        private static bool IsLocalModule(string name)
+        {
+            var dir = RealPython.ScriptDirectory;
+            if (string.IsNullOrEmpty(dir)) return false;
+            try { return System.IO.File.Exists(System.IO.Path.Combine(dir, name + ".py")); } catch { return false; }
+        }
+
         private static bool CheckImports(PyNode s, ref string reason)
         {
             switch (s)
@@ -73,12 +81,12 @@ namespace Calcpad.Core.Python
                     foreach (var (mod, _) in im.Names)
                     {
                         var root = mod.Split('.')[0];
-                        if (!NativeModules.Contains(root)) { reason = $"import {mod}"; return false; }
+                        if (!NativeModules.Contains(root) && !IsLocalModule(root)) { reason = $"import {mod}"; return false; }
                     }
                     return true;
                 case ImportFromStmt fr:
                     var r = fr.Module.TrimStart('.').Split('.')[0];
-                    if (r.Length > 0 && !NativeModules.Contains(r)) { reason = $"from {fr.Module} import ..."; return false; }
+                    if (r.Length > 0 && !NativeModules.Contains(r) && !IsLocalModule(r)) { reason = $"from {fr.Module} import ..."; return false; }
                     return true;
                 // Imports dentro de bloques de control (if/for/while/try/with/def/class) son CONDICIONALES
                 // o GUARDADOS -> NO fuerzan fallback a Python externo; se resuelven en runtime (y si el
@@ -339,13 +347,74 @@ namespace Calcpad.Core.Python
             // scipy EMBEBIDO (scipy.sparse+spsolve, scipy.linalg, scipy.optimize) — sin Python externo.
             if (name == "scipy")
                 return _scipyModule ??= PythonScipy.CreateModule(this);
+            // stdlib EMBEBIDA: sys / time / os (os.path) — sin Python externo.
+            if (name == "sys") return _sysModule ??= PythonStdlib.Sys(ScriptFilePath());
+            if (name == "time") return _timeModule ??= PythonStdlib.Time();
+            if (name == "os") return _osModule ??= PythonStdlib.Os(RealPython.ScriptDirectory);
+            if (name == "collections") return _collectionsModule ??= BuildCollections();
+            // Modulo .py LOCAL (hermano del script): parsear+ejecutar como modulo -> import fem_helper OK nativo.
+            var local = LoadLocalModule(name);
+            if (local != null) return local;
             // Modulo no nativo -> ImportError atrapable (como python real), para que
             // 'try: import X except ImportError:' funcione (dependencias opcionales).
             throw new PyRuntimeError("ModuleNotFoundError", $"No module named '{name}'");
         }
+
+        private Dictionary<string, PyModule> _localModules;
+        // Carga un modulo .py hermano del script (mismo directorio): lo corre en su PROPIO evaluador
+        // (sus funciones cargan su propio globals como closure) y expone sus nombres como PyModule.
+        private PyModule LoadLocalModule(string name)
+        {
+            _localModules ??= new Dictionary<string, PyModule>(StringComparer.Ordinal);
+            if (_localModules.TryGetValue(name, out var cached)) return cached;
+            var dir = RealPython.ScriptDirectory;
+            if (string.IsNullOrEmpty(dir) || !System.IO.Directory.Exists(dir)) return null;
+            var file = System.IO.Path.Combine(dir, name + ".py");
+            if (!System.IO.File.Exists(file)) return null;
+            _localModules[name] = new PyModule(name);    // placeholder (evita recursion en imports circulares)
+            try
+            {
+                var src = System.IO.File.ReadAllText(file);
+                var toks = PythonTokenizer.Tokenize(src);
+                var stmts = new PythonParser(toks).ParseModule();
+                var sub = new PythonEvaluator();
+                sub.ExecBlock(stmts, sub.Globals);
+                var mod = new PyModule(name);
+                foreach (var kv in sub.Globals.Vars) mod.Attrs[kv.Key] = kv.Value;
+                _localModules[name] = mod;
+                return mod;
+            }
+            catch (PyRuntimeError) { throw; }
+            catch (Exception ex) { throw new PyRuntimeError("ImportError", $"no se pudo importar '{name}': {ex.Message}"); }
+        }
         private PyModule _opsModule;
         private PyModule _numpyModule;
         private PyModule _scipyModule;
+        private PyModule _sysModule, _timeModule, _osModule, _collectionsModule;
+
+        // collections nativo: Counter (clave faltante->0, para d[k]+=1), defaultdict, OrderedDict.
+        private PyModule BuildCollections()
+        {
+            var m = new PyModule("collections");
+            m.Attrs["Counter"] = new PyBuiltin("Counter", (a, kw) =>
+            {
+                var d = new PyDict { DefaultZero = true };
+                if (a.Length > 0 && a[0] != null)
+                    foreach (var x in Iterate(a[0])) { d.TryGet(x, out var c); d.Set(x, (c is long l ? l : 0L) + 1L); }
+                return d;
+            });
+            m.Attrs["defaultdict"] = new PyBuiltin("defaultdict", (a, kw) => new PyDict { DefaultZero = true });
+            m.Attrs["OrderedDict"] = new PyBuiltin("OrderedDict", (a, kw) => new PyDict());
+            return m;
+        }
+
+        // Ruta del script actual (para sys.argv[0] / __file__). Usa ScriptDirectory + un nombre estable.
+        private static string ScriptFilePath()
+        {
+            var d = RealPython.ScriptDirectory;
+            if (string.IsNullOrEmpty(d)) return "__main__.py";
+            return System.IO.Directory.Exists(d) ? System.IO.Path.Combine(d, "__main__.py") : d;
+        }
 
         private string _opsPatHeader;       // patrón de cargas abierto (replica el buffer de openseespy)
         private StringBuilder _opsPatBody;
@@ -1023,6 +1092,7 @@ namespace Calcpad.Core.Python
                 case string s: { int i = NormIndex(PyOps.ToLong(idx), s.Length); return s[i].ToString(); }
                 case PyDict d:
                     if (d.TryGet(idx, out var v)) return v;
+                    if (d.DefaultZero) return 0L;   // Counter: clave faltante -> 0
                     throw new PyRuntimeError("KeyError", PyOps.Repr(idx));
                 case PyRange r:
                 {
@@ -1532,6 +1602,7 @@ namespace Calcpad.Core.Python
             Reg("list", (a, kw) => a.Length == 0 ? new PyList() : new PyList(Iterate(a[0])));
             Reg("tuple", (a, kw) => a.Length == 0 ? new PyTuple() : new PyTuple(Iterate(a[0])));
             Reg("set", (a, kw) => { var s = new PySet(); if (a.Length > 0) foreach (var x in Iterate(a[0])) s.Add(x); return s; });
+            Reg("frozenset", (a, kw) => { var s = new PySet(); if (a.Length > 0 && a[0] != null) foreach (var x in Iterate(a[0])) s.Add(x); return s; });
             Reg("dict", (a, kw) =>
             {
                 var d = new PyDict();
@@ -1626,6 +1697,7 @@ namespace Calcpad.Core.Python
             // El script de entrada corre como programa principal, igual que `python script.py`,
             // para que `if __name__ == "__main__":` ejecute su bloque en el motor nativo.
             Globals.Vars["__name__"] = "__main__";
+            Globals.Vars["__file__"] = ScriptFilePath();   // os.path.dirname(os.path.abspath(__file__)) -> carpeta del script
         }
 
         private bool IsInstance(object obj, object cls)

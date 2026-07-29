@@ -70,6 +70,7 @@ namespace Calcpad.Core.Python
     {
         public readonly List<object> Keys = new();
         public readonly List<object> Values = new();
+        public bool DefaultZero;   // collections.Counter: clave faltante -> 0 (para d[k]+=1)
         public int Count => Keys.Count;
         public bool TryGet(object key, out object value)
         {

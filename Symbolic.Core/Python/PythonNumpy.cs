@@ -303,6 +303,8 @@ namespace Calcpad.Core.Python
             Reg("sign", (a, kw) => UFunc(a[0], v => (double)Math.Sign(v)));
             Reg("deg2rad", (a, kw) => UFunc(a[0], v => v * Math.PI / 180.0));
             Reg("rad2deg", (a, kw) => UFunc(a[0], v => v * 180.0 / Math.PI));
+            Reg("radians", (a, kw) => UFunc(a[0], v => v * Math.PI / 180.0));   // alias numpy
+            Reg("degrees", (a, kw) => UFunc(a[0], v => v * 180.0 / Math.PI));
             // reducciones
             Reg("max", (a, kw) => Reduce(AsArr(a[0]), Math.Max));
             Reg("amax", (a, kw) => Reduce(AsArr(a[0]), Math.Max));
