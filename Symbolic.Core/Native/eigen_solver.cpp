@@ -98,6 +98,39 @@ EXPORT int skyline_cholesky_solve(
 }
 
 /**
+ * Solve GENERAL sparse system A*x = b using Eigen SparseLU (NO simetrica).
+ * Entrada COO: nnz triplets (rows[k], cols[k], vals[k]); setFromTriplets SUMA
+ * duplicados (ensamblaje FEM directo). Devuelve 0 = ok, -1 = factorizacion fallo, -2 = solve fallo.
+ */
+EXPORT int sparse_lu_solve(
+    int n, int nnz,
+    const int* rows, const int* cols, const double* vals,
+    const double* rhs, double* solution)
+{
+    std::vector<Triplet> triplets;
+    triplets.reserve(nnz);
+    for (int k = 0; k < nnz; ++k)
+        triplets.emplace_back(rows[k], cols[k], vals[k]);
+
+    SpMat A(n, n);
+    A.setFromTriplets(triplets.begin(), triplets.end());
+    A.makeCompressed();
+
+    Vec f = Eigen::Map<const Vec>(rhs, n);
+
+    Eigen::SparseLU<SpMat, Eigen::COLAMDOrdering<int>> lu;
+    lu.analyzePattern(A);
+    lu.factorize(A);
+    if (lu.info() != Eigen::Success) return -1;
+
+    Vec u = lu.solve(f);
+    if (lu.info() != Eigen::Success) return -2;
+
+    std::memcpy(solution, u.data(), n * sizeof(double));
+    return 0;
+}
+
+/**
  * Solve general dense system A*x = b.
  */
 EXPORT int dense_solve(

@@ -25,6 +25,25 @@ namespace Calcpad.Core
             [Out] double[] solution);
 
         /// <summary>
+        /// Solve GENERAL sparse system A*x = b via Eigen SparseLU (no simetrica).
+        /// COO: nnz triplets (rows[k], cols[k], vals[k]); suma duplicados. 0 = ok.
+        /// </summary>
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int sparse_lu_solve(
+            int n, int nnz,
+            [In] int[] rows, [In] int[] cols, [In] double[] vals,
+            [In] double[] rhs, [Out] double[] solution);
+
+        /// <summary>Resuelve A·x=b (A dispersa COO general) con Eigen SparseLU. Lanza si falla.</summary>
+        internal static double[] SparseLuSolve(int n, int[] rows, int[] cols, double[] vals, double[] rhs)
+        {
+            var sol = new double[n];
+            int info = sparse_lu_solve(n, vals.Length, rows, cols, vals, rhs, sol);
+            if (info != 0) throw new InvalidOperationException($"sparse_lu_solve info={info}");
+            return sol;
+        }
+
+        /// <summary>
         /// Solve dense system A*x = b.
         /// </summary>
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]

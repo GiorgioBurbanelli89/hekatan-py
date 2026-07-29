@@ -307,9 +307,21 @@ namespace Calcpad.Core.Python
             if (A is PySparseMatrix m)
             {
                 m.Materialize();
-                // El solver skyline nativo es Cholesky (SIMETRICO SPD) y daba resultados erroneos
-                // (formato). El tangente D-P no-asociado del FEM es ademas NO simetrico. Ruta CORRECTA:
-                // densificar + LU GENERAL. (Sparse-LU nativo rapido = follow-up: exponer SparseLU del C++.)
+                // SparseLU nativo (Eigen, NO simetrico) — rapido para FEM grande. Si no esta el DLL
+                // o falla, cae a LU denso general (correcto). El skyline Cholesky NO sirve (asume SPD).
+                var bv = Arr(b);
+                if (m.Rows == m.Cols && bv.Size == m.Rows && Calcpad.Core.EigenInterop.IsAvailable())
+                {
+                    try
+                    {
+                        var rr = new int[m.Nnz]; var cc = new int[m.Nnz]; var vv = new double[m.Nnz];
+                        for (int e = 0; e < m.Nnz; e++) { rr[e] = m.R[e]; cc[e] = m.C[e]; vv[e] = m.V[e]; }
+                        var rhs = new double[m.Rows]; for (int i = 0; i < m.Rows; i++) rhs[i] = bv.Data[i];
+                        var sol = Calcpad.Core.EigenInterop.SparseLuSolve(m.Rows, rr, cc, vv, rhs);
+                        return new PyNdArray(sol, new[] { m.Rows });
+                    }
+                    catch { /* cae a denso */ }
+                }
                 return PyNumpy.Solve((PyNdArray)ToDense(m), Arr(b));
             }
             // A densa → solve denso
