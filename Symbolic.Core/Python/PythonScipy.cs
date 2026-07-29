@@ -38,6 +38,20 @@ namespace Calcpad.Core.Python
             sparse.Attrs["diags"] = new PyBuiltin("diags", (a, kw) => Diags(a));
             var splinalg = new PyModule("scipy.sparse.linalg");
             splinalg.Attrs["spsolve"] = new PyBuiltin("spsolve", (a, kw) => SpSolve(a[0], a[1]));
+            // splu(A) -> objeto factorizacion con .solve(b). Cada Kt del FEM se factoriza-y-resuelve
+            // una vez, asi que splu(A).solve(b) == spsolve(A,b) (Eigen skyline). Deja correr el FEM
+            // NATIVO (sin Python externo). factorized(A) devuelve el callable solve directamente.
+            splinalg.Attrs["splu"] = new PyBuiltin("splu", (a, kw) =>
+            {
+                var A = a[0]; var lu = new PyModule("SuperLU");
+                lu.Attrs["solve"] = new PyBuiltin("solve", (aa, kk) => SpSolve(A, aa[0]));
+                return lu;
+            });
+            splinalg.Attrs["factorized"] = new PyBuiltin("factorized", (a, kw) =>
+            {
+                var A = a[0];
+                return new PyBuiltin("solve", (aa, kk) => SpSolve(A, aa[0]));
+            });
             sparse.Attrs["linalg"] = splinalg;
             scipy.Attrs["sparse"] = sparse;
 

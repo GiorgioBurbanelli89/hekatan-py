@@ -372,8 +372,19 @@ namespace Calcpad.Cli
                     // el CSS template de Calcpad (clases matrix/tr/td/var/eq/b).
                     var pipeline = new Calcpad.Core.Python.PythonPipeline();
                     pipeline.ForceRealPython = isLegacy; // --legacy ⇒ forzar python real
+                    // Diagnóstico: HEK_NATIVE_ONLY=1 prohíbe el fallback a python real → si el motor
+                    // embebido no soporta algo, el error dice EXACTAMENTE qué (no cae en silencio).
+                    if (System.Environment.GetEnvironmentVariable("HEK_NATIVE_ONLY") == "1")
+                        pipeline.AllowRealPythonFallback = false;
                     // Carpeta del .py → imports hermanos (import fem_numpy) y open() relativos.
                     Calcpad.Core.Python.RealPython.ScriptDirectory = path;
+                    // Python EMBEBIDO por defecto: si hay un venv 'hekatan_pyenv' JUNTO al exe, usarlo
+                    // (app self-contained, sin depender del Python del sistema). El #env/#venv del script
+                    // sigue teniendo prioridad (OverrideInterpreter). Si no hay venv embebido, cae al PATH.
+                    var _bundledEnv = System.IO.Path.Combine(AppContext.BaseDirectory, "hekatan_pyenv");
+                    if (Calcpad.Core.Python.PythonEnvironments.IsVenv(_bundledEnv))
+                        Calcpad.Core.Python.RealPython.Interpreter =
+                            Calcpad.Core.Python.PythonEnvironments.VenvPython(_bundledEnv);
                     if (isStreamDebug)
                     {
                         pipeline.StreamingMode = true;
