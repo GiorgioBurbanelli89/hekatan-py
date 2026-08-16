@@ -1,9 +1,9 @@
-; Inno Setup Script para Hekatan Python3
+﻿; Inno Setup Script para Hekatan Python3
 ; Genera un instalador setup.exe
 ; Variante Python-only: motor Python nativo en C# + fallback a python real.
 
 #define MyAppName "Hekatan Python3"
-#define MyAppVersion "1.0.11"
+#define MyAppVersion "1.0.14"
 #define MyAppPublisher "Jorge Burbano"
 #define MyAppURL "https://github.com/GiorgioBurbanelli89/Calcpad-Suite-Py"
 #define MyAppExeName "HekatanPython3.exe"
