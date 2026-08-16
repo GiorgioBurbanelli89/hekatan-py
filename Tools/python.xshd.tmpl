@@ -1,0 +1,98 @@
+<?xml version="1.0"?>
+<!-- GENERADO por Tools/gen_python_builtins.py desde Tools/python.xshd.tmpl — no editar a mano.
+     Las <Word> son los builtins REALES del motor (Symbolic.Core/Python).
+     Los colores se re-tinen en caliente desde AplicarColoresAvalon. -->
+<SyntaxDefinition name="Python" xmlns="http://icsharpcode.net/sharpdevelop/syntaxdefinition/2008">
+
+  <Color name="Comment"   foreground="#228B22" />
+  <Color name="Celda"     foreground="#046A38" fontWeight="bold" />
+  <Color name="TituloDoc" foreground="#8A5A00" fontWeight="bold" />
+  <Color name="TextoDoc"  foreground="#31506E" />
+  <Color name="Directiva" foreground="#B06000" fontWeight="bold" />
+  <Color name="String"    foreground="#A15C00" />
+  <Color name="Number"    foreground="#0B66C3" />
+  <Color name="Keyword"   foreground="#A626A4" fontWeight="bold" />
+  <Color name="Constant"  foreground="#0B7285" />
+  <Color name="Builtin"   foreground="#1A56C4" />
+
+  <RuleSet ignoreCase="false">
+
+    <!-- EL ORDEN MANDA: AvalonEdit prueba los Span de arriba abajo y se queda con el primero
+         que engancha. Las cadenas van primero porque un '#' dentro de una cadena NO es
+         comentario (en Hekatan Lab pasaba al reves con el % dentro de comillas). -->
+
+    <!-- docstrings / cadenas triples (varias lineas) -->
+    <Span color="String" multiline="true">
+      <Begin>[fFrRbBuU]{0,2}"""</Begin>
+      <End>"""</End>
+    </Span>
+    <Span color="String" multiline="true">
+      <Begin>[fFrRbBuU]{0,2}'''</Begin>
+      <End>'''</End>
+    </Span>
+
+    <!-- cadenas de una linea; el RuleSet interno hace que \" no cierre la cadena -->
+    <Span color="String" multiline="false">
+      <Begin>[fFrRbBuU]{0,2}"</Begin>
+      <End>"</End>
+      <RuleSet>
+        <Span begin="\\" end="." />
+      </RuleSet>
+    </Span>
+    <Span color="String" multiline="false">
+      <Begin>[fFrRbBuU]{0,2}'</Begin>
+      <End>'</End>
+      <RuleSet>
+        <Span begin="\\" end="." />
+      </RuleSet>
+    </Span>
+
+    <!-- celda de codigo  #%%  (se pliega en el editor; NO sale en el reporte) -->
+    <Span color="Celda">
+      <Begin>\#[ ]?%%</Begin>
+    </Span>
+
+    <!-- comentarios que SI salen en el reporte:  #" encabezado  ·  #' markdown -->
+    <Span color="TituloDoc">
+      <Begin>\#"</Begin>
+    </Span>
+    <Span color="TextoDoc">
+      <Begin>\#'</Begin>
+    </Span>
+
+    <!-- directivas del motor -->
+    <Span color="Directiva">
+      <Begin>\#(cp|hide|show|noc|val|rad|deg|noauto|solografica|nosub)</Begin>
+    </Span>
+
+    <!-- comentario normal -->
+    <Span color="Comment">
+      <Begin>\#</Begin>
+    </Span>
+
+    <!-- palabras clave que el parser del motor entiende -->
+    <Keywords color="Keyword">
+{KEYWORDS}
+    </Keywords>
+
+    <!-- constantes -->
+    <Keywords color="Constant">
+{CONSTANTES}
+    </Keywords>
+
+    <!-- funciones REALES del motor -->
+    <Keywords color="Builtin">
+{BUILTINS}
+    </Keywords>
+
+    <!-- numeros: 25, 3.14, 1e-3, .5, 0x1f, 0b1010, 3j -->
+    <Rule color="Number">
+      \b0[xX][0-9a-fA-F_]+ | \b0[bB][01_]+ | \b0[oO][0-7_]+
+      |
+      \b\d[\d_]*(\.\d*)?([eE][+-]?\d+)?[jJ]?
+      |
+      \.\d[\d_]*([eE][+-]?\d+)?[jJ]?
+    </Rule>
+
+  </RuleSet>
+</SyntaxDefinition>

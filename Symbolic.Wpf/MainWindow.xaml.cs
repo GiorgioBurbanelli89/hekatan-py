@@ -289,6 +289,7 @@ namespace Calcpad.Wpf
                 Include = Include
             };
             _insertManager = new(RichTextBox);
+            _insertManager.Desvio = InsertarEnAvalon;   // EDITOR PLEGABLE: insertar donde el usuario VE el cursor
             _autoCompleteManager = new(RichTextBox, AutoCompleteListBox, Dispatcher, _insertManager);
             Mark("AutoCompleteManager (AutoList)");
             _cfn = string.Empty;
@@ -469,6 +470,11 @@ namespace Calcpad.Wpf
                 else
                     tag = tag[..(index - 1)];
             }
+            // Con el editor plegable delante, el marcado y las plantillas de varias lineas van
+            // AHI, no al RichTextBox oculto (donde caerian en el cursor equivocado).
+            if (tag.Contains('‖') && MarcarEnAvalon(tag)) return;
+            if (tag.Contains('§') && InsertarLineasEnAvalon(tag)) return;
+
             RichTextBox.BeginChange();
             if (tag.Contains('‖'))
             {
@@ -1175,12 +1181,17 @@ namespace Calcpad.Wpf
 
         private void Command_Undo(object sender, ExecutedRoutedEventArgs e)
         {
+            // Con el editor plegable, deshace EL: tiene su propia pila y es la que conoce lo
+            // que acabas de escribir. La clasica (_undoMan) guarda el documento entero por
+            // pasos gruesos; mezclarlas deshace de mas.
+            if (DeshacerEnAvalon(rehacer: false)) return;
             if (_undoMan.Undo())
                 RestoreUndoData();
         }
 
         private void Command_Redo(object sender, ExecutedRoutedEventArgs e)
         {
+            if (DeshacerEnAvalon(rehacer: true)) return;
             if (_undoMan.Redo())
                 RestoreUndoData();
         }
@@ -1199,6 +1210,13 @@ namespace Calcpad.Wpf
 
         private async void CommandFindReplace(FindReplace.Modes mode)
         {
+            // BUSCAR (Ctrl+F): el buscador clasico trabaja sobre el RichTextBox, que con el
+            // editor plegable delante no se ve; AvalonEdit trae el suyo y resalta TODAS las
+            // coincidencias. REEMPLAZAR (Ctrl+H) sigue con el dialogo clasico: el panel de
+            // AvalonEdit no reemplaza, y el clasico funciona porque escribe en el RichTextBox
+            // oculto y el texto vuelve al editor por SincronizarHaciaAvalon.
+            if (!_isWebView2Focused && mode == FindReplace.Modes.Find && BuscarEnAvalon(false)) return;
+
             if (_isWebView2Focused)
                 _findReplace.Mode = FindReplace.Modes.Find;
             else
@@ -2170,6 +2188,7 @@ namespace Calcpad.Wpf
             RichTextBox.EndChange();
             _isTextChangedEnabled = true;
             _forceHighlight = true;
+            SincronizarHaciaAvalon();          // EDITOR PLEGABLE: el archivo abierto pasa al editor plegable
             return hasForm;
         }
 
@@ -2259,6 +2278,7 @@ namespace Calcpad.Wpf
             HighLighter.Clear(_currentParagraph);
             RichTextBox.EndChange();
             _isTextChangedEnabled = true;
+            SincronizarHaciaAvalon();          // EDITOR PLEGABLE
         }
 
         const string Tabs = "\t\t\t\t\t\t\t\t\t\t\t\t";
@@ -2767,6 +2787,13 @@ namespace Calcpad.Wpf
                     if (i + 1 < argv.Length && int.TryParse(argv[i + 1], out var nf)) { _gifFrames = nf; i++; }
                     if (i + 1 < argv.Length && int.TryParse(argv[i + 1], out var iv)) { _gifIntervalMs = iv; i++; }
                 }
+                // EDITOR PLEGABLE: banderas que lee PrepararAvalon. Se consumen AQUI porque lo
+                // que no se reconoce se pega al nombre del archivo y no se abriria nada.
+                else if (argv[i] == "--plegar") { }
+                else if ((argv[i] == "--completar" || argv[i] == "--buscar" ||
+                          argv[i] == "--insertar" || argv[i] == "--cshot" ||
+                          argv[i] == "--marcar" || argv[i] == "--enlinea") && i + 1 < argv.Length) i++;
+                else if (argv[i] == "--aceptar" || argv[i] == "--doble") { }
                 else fileParts.Add(argv[i]);
             }
             if (fileParts.Count > 0)
@@ -3006,6 +3033,10 @@ namespace Calcpad.Wpf
 
         private async void RichTextBox_TextChanged(object sender, TextChangedEventArgs e)
         {
+            // EDITOR PLEGABLE: si el cambio VINO de AvalonEdit no hay que devolverselo (seria
+            // un bucle); si vino de cualquier otro sitio (botones, teclado de simbolos,
+            // MathCanvas...), hay que devolverlo alli al terminar.
+            var vinoDeAvalon = _desdeAvalon;
             if (_isTextChangedEnabled)
             {
                 if (_document.Blocks.Count == 0)
@@ -3063,6 +3094,10 @@ namespace Calcpad.Wpf
                     }
                     catch { }
                 }
+
+                // EDITOR PLEGABLE: Code → editor plegable (mismo patron que MathCanvas de arriba)
+                if (!vinoDeAvalon)
+                    SincronizarHaciaAvalon();
             }
         }
 
@@ -3818,6 +3853,9 @@ namespace Calcpad.Wpf
             var h = SystemParameters.PrimaryScreenHeight;
             if (Height > h)
                 Height = h;
+
+            // EDITOR PLEGABLE: montar el editor con plegado (AvalonEdit) encima del clasico.
+            PrepararAvalon();
         }
 
         private async void Include_Click(object sender, MouseButtonEventArgs e)

@@ -3,6 +3,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:wpf="clr-namespace:Calcpad.Wpf"
     xmlns:me="clr-namespace:Calcpad.Wpf.MathEditor"
+    xmlns:ae="http://icsharpcode.net/sharpdevelop/avalonedit"
     xmlns:av="http://schemas.microsoft.com/expression/blend/2008" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" mc:Ignorable="av" x:Class="Calcpad.Wpf.MainWindow"
     Title=" Hekatan Py 1.0.0 — Python-syntax scientific worksheets"
     Height="800"
@@ -1930,7 +1931,21 @@
                       Checked="AutoRunCheckBox_Checked" Unchecked="AutoRunCheckBox_Unchecked"
                       ToolTip="{x:Static wpf:MainWindowResources.RefreshResultsAfterEachEdit}" FontFamily="Roboto" />
         </Canvas>
-        <Separator Grid.Row="0" HorizontalAlignment="Left" Height="2" Margin="85,35,0,0" 
+        <!-- ══ control del editor plegable ══
+             En el hueco de la fila del menu (a la derecha de "Help"): la fila de abajo de la
+             barra ya esta llena de punta a punta. -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal"
+                    HorizontalAlignment="Left" VerticalAlignment="Top" Margin="228,1,0,0">
+            <Button x:Name="PlegarTodoBtn" Content="⊟" Width="20" Height="18" Padding="0" Margin="0,0,3,0"
+                    ToolTip="Plegar todo (def, class, for, if, celdas #%%...)" Click="PlegarTodo_Click"/>
+            <Button x:Name="DesplegarTodoBtn" Content="⊞" Width="20" Height="18" Padding="0" Margin="0,0,6,0"
+                    ToolTip="Desplegar todo" Click="DesplegarTodo_Click"/>
+            <CheckBox x:Name="EditorPlegableChk" Content="Plegado" IsChecked="True" VerticalAlignment="Center"
+                      FontSize="11.5" FontFamily="Roboto"
+                      ToolTip="Editor con carpetas plegables (AvalonEdit). Desmarcado = editor clasico de Hekatan Python3."
+                      Checked="EditorPlegable_Changed" Unchecked="EditorPlegable_Changed"/>
+        </StackPanel>
+        <Separator Grid.Row="0" HorizontalAlignment="Left" Height="2" Margin="85,35,0,0"
                    VerticalAlignment="Top" Width="24" IsTabStop="False" 
                    ScrollViewer.VerticalScrollBarVisibility="Disabled" RenderTransformOrigin="0.5,0.5" Background="#AAA0A0A0">
             <Separator.RenderTransform>
@@ -2502,8 +2517,20 @@
                             </Paragraph>
                         </FlowDocument>
                     </RichTextBox>
+                    <!-- ══ el editor con PLEGADO (AvalonEdit) ══
+                         Va encima del RichTextBox, en la misma celda. El RichTextBox sigue ahi,
+                         oculto, alimentado por SetInputText: asi TODO lo demas de la app
+                         (autorun, calcular, guardar, insertar, MathCanvas) sigue igual.
+                         La casilla "Plegado" alterna para comparar los dos editores. -->
+                    <ae:TextEditor x:Name="AvalonEditor" Grid.Row="0" Margin="6,33,5,24"
+                                   FontFamily="Consolas" FontSize="14"
+                                   ShowLineNumbers="True"
+                                   WordWrap="False"
+                                   HorizontalScrollBarVisibility="Auto"
+                                   VerticalScrollBarVisibility="Auto"
+                                   Padding="4,2"/>
                     <Canvas Grid.Row="0" x:Name="LineNumbers" HorizontalAlignment="Left" Margin="6,33,0,24" Width="40"/>
-                    <Border Grid.Row="0" BorderThickness="0,0,1,0" HorizontalAlignment="Left" Margin="48,28,0,24" Width="2" BorderBrush="#FFE3E3E3"/>
+                    <Border Grid.Row="0" x:Name="LineNumbersBorder" BorderThickness="0,0,1,0" HorizontalAlignment="Left" Margin="48,28,0,24" Width="2" BorderBrush="#FFE3E3E3"/>
                     <ListBox Grid.Row="0" x:Name="AutoCompleteListBox" 
                              HorizontalAlignment="Left" 
                              VerticalAlignment="Top" 

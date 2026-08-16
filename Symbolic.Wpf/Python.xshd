@@ -1,0 +1,134 @@
+<?xml version="1.0"?>
+<!-- GENERADO por Tools/gen_python_builtins.py desde Tools/python.xshd.tmpl — no editar a mano.
+     Las <Word> son los builtins REALES del motor (Symbolic.Core/Python).
+     Los colores se re-tinen en caliente desde AplicarColoresAvalon. -->
+<SyntaxDefinition name="Python" xmlns="http://icsharpcode.net/sharpdevelop/syntaxdefinition/2008">
+
+  <Color name="Comment"   foreground="#228B22" />
+  <Color name="Celda"     foreground="#046A38" fontWeight="bold" />
+  <Color name="TituloDoc" foreground="#8A5A00" fontWeight="bold" />
+  <Color name="TextoDoc"  foreground="#31506E" />
+  <Color name="Directiva" foreground="#B06000" fontWeight="bold" />
+  <Color name="String"    foreground="#A15C00" />
+  <Color name="Number"    foreground="#0B66C3" />
+  <Color name="Keyword"   foreground="#A626A4" fontWeight="bold" />
+  <Color name="Constant"  foreground="#0B7285" />
+  <Color name="Builtin"   foreground="#1A56C4" />
+
+  <RuleSet ignoreCase="false">
+
+    <!-- EL ORDEN MANDA: AvalonEdit prueba los Span de arriba abajo y se queda con el primero
+         que engancha. Las cadenas van primero porque un '#' dentro de una cadena NO es
+         comentario (en Hekatan Lab pasaba al reves con el % dentro de comillas). -->
+
+    <!-- docstrings / cadenas triples (varias lineas) -->
+    <Span color="String" multiline="true">
+      <Begin>[fFrRbBuU]{0,2}"""</Begin>
+      <End>"""</End>
+    </Span>
+    <Span color="String" multiline="true">
+      <Begin>[fFrRbBuU]{0,2}'''</Begin>
+      <End>'''</End>
+    </Span>
+
+    <!-- cadenas de una linea; el RuleSet interno hace que \" no cierre la cadena -->
+    <Span color="String" multiline="false">
+      <Begin>[fFrRbBuU]{0,2}"</Begin>
+      <End>"</End>
+      <RuleSet>
+        <Span begin="\\" end="." />
+      </RuleSet>
+    </Span>
+    <Span color="String" multiline="false">
+      <Begin>[fFrRbBuU]{0,2}'</Begin>
+      <End>'</End>
+      <RuleSet>
+        <Span begin="\\" end="." />
+      </RuleSet>
+    </Span>
+
+    <!-- celda de codigo  #%%  (se pliega en el editor; NO sale en el reporte) -->
+    <Span color="Celda">
+      <Begin>\#[ ]?%%</Begin>
+    </Span>
+
+    <!-- comentarios que SI salen en el reporte:  #" encabezado  ·  #' markdown -->
+    <Span color="TituloDoc">
+      <Begin>\#"</Begin>
+    </Span>
+    <Span color="TextoDoc">
+      <Begin>\#'</Begin>
+    </Span>
+
+    <!-- directivas del motor -->
+    <Span color="Directiva">
+      <Begin>\#(cp|hide|show|noc|val|rad|deg|noauto|solografica|nosub)</Begin>
+    </Span>
+
+    <!-- comentario normal -->
+    <Span color="Comment">
+      <Begin>\#</Begin>
+    </Span>
+
+    <!-- palabras clave que el parser del motor entiende -->
+    <Keywords color="Keyword">
+      <Word>and</Word><Word>as</Word><Word>assert</Word><Word>async</Word><Word>await</Word><Word>break</Word><Word>class</Word><Word>continue</Word>
+      <Word>def</Word><Word>del</Word><Word>elif</Word><Word>else</Word><Word>except</Word><Word>finally</Word><Word>for</Word><Word>from</Word>
+      <Word>global</Word><Word>if</Word><Word>import</Word><Word>in</Word><Word>is</Word><Word>lambda</Word><Word>nonlocal</Word><Word>not</Word>
+      <Word>or</Word><Word>pass</Word><Word>raise</Word><Word>return</Word><Word>try</Word><Word>while</Word><Word>with</Word><Word>yield</Word>
+    </Keywords>
+
+    <!-- constantes -->
+    <Keywords color="Constant">
+      <Word>True</Word><Word>False</Word><Word>None</Word><Word>NotImplemented</Word><Word>Ellipsis</Word><Word>self</Word>
+    </Keywords>
+
+    <!-- funciones REALES del motor -->
+    <Keywords color="Builtin">
+      <Word>Counter</Word><Word>CubicSpline</Word><Word>OrderedDict</Word><Word>abs</Word><Word>absolute</Word><Word>abspath</Word><Word>acos</Word><Word>acosh</Word>
+      <Word>all</Word><Word>amax</Word><Word>amin</Word><Word>angle</Word><Word>any</Word><Word>arange</Word><Word>argmax</Word><Word>argmin</Word>
+      <Word>argv</Word><Word>around</Word><Word>array</Word><Word>asarray</Word><Word>asin</Word><Word>asinh</Word><Word>astype</Word><Word>atan</Word>
+      <Word>atan2</Word><Word>atanh</Word><Word>basename</Word><Word>bin</Word><Word>bisect</Word><Word>blackman</Word><Word>bool</Word><Word>brentq</Word>
+      <Word>butter</Word><Word>cdf</Word><Word>cdist</Word><Word>ceil</Word><Word>cholesky</Word><Word>chr</Word><Word>cityblock</Word><Word>clip</Word>
+      <Word>column_stack</Word><Word>comb</Word><Word>concatenate</Word><Word>conj</Word><Word>convolve</Word><Word>coo_matrix</Word><Word>copy</Word><Word>copysign</Word>
+      <Word>correlate</Word><Word>cos</Word><Word>cosh</Word><Word>csc_matrix</Word><Word>csr_matrix</Word><Word>cumsum</Word><Word>cumtrapz</Word><Word>cumulative_trapezoid</Word>
+      <Word>curve_fit</Word><Word>defaultdict</Word><Word>deg2rad</Word><Word>degrees</Word><Word>det</Word><Word>diag</Word><Word>diags</Word><Word>dict</Word>
+      <Word>diff</Word><Word>dirname</Word><Word>dist</Word><Word>distance</Word><Word>divmod</Word><Word>dot</Word><Word>e</Word><Word>eig</Word>
+      <Word>eig_sym</Word><Word>eigh</Word><Word>eigvals</Word><Word>eigvalsh</Word><Word>enumerate</Word><Word>erf</Word><Word>erfc</Word><Word>erfinv</Word>
+      <Word>euclidean</Word><Word>executable</Word><Word>exists</Word><Word>exit</Word><Word>exp</Word><Word>expm</Word><Word>expm1</Word><Word>eye</Word>
+      <Word>fabs</Word><Word>factorial</Word><Word>factorized</Word><Word>fft</Word><Word>fftfreq</Word><Word>filter</Word><Word>filtfilt</Word><Word>find_peaks</Word>
+      <Word>flatten</Word><Word>float</Word><Word>float64</Word><Word>float_</Word><Word>floor</Word><Word>fmod</Word><Word>format</Word><Word>frozenset</Word>
+      <Word>fsolve</Word><Word>full</Word><Word>gamma</Word><Word>gammainc</Word><Word>gammaln</Word><Word>gcd</Word><Word>genfromtxt</Word><Word>getcwd</Word>
+      <Word>hamming</Word><Word>hann</Word><Word>hex</Word><Word>hstack</Word><Word>hypot</Word><Word>identity</Word><Word>ifft</Word><Word>imag</Word>
+      <Word>inf</Word><Word>input</Word><Word>int</Word><Word>int64</Word><Word>int_</Word><Word>integrate</Word><Word>interp</Word><Word>interp1d</Word>
+      <Word>interpolate</Word><Word>inv</Word><Word>io</Word><Word>irfft</Word><Word>isdir</Word><Word>isfile</Word><Word>isfinite</Word><Word>isinf</Word>
+      <Word>isinstance</Word><Word>isnan</Word><Word>ix_</Word><Word>join</Word><Word>lcm</Word><Word>least_squares</Word><Word>len</Word><Word>lfilter</Word>
+      <Word>lil_matrix</Word><Word>linalg</Word><Word>linesep</Word><Word>linspace</Word><Word>list</Word><Word>listdir</Word><Word>loadmat</Word><Word>loadtxt</Word>
+      <Word>log</Word><Word>log10</Word><Word>log1p</Word><Word>log2</Word><Word>lstsq</Word><Word>lu</Word><Word>makedirs</Word><Word>map</Word>
+      <Word>matmul</Word><Word>max</Word><Word>maximum</Word><Word>maxsize</Word><Word>mean</Word><Word>mesh3d</Word><Word>mesh3d_viewer</Word><Word>mesh_viewer</Word>
+      <Word>meshgrid</Word><Word>min</Word><Word>minimize</Word><Word>minimize_scalar</Word><Word>minimum</Word><Word>mkdir</Word><Word>modules</Word><Word>monotonic</Word>
+      <Word>name</Word><Word>nan</Word><Word>nanmax</Word><Word>nanmin</Word><Word>newaxis</Word><Word>newton</Word><Word>norm</Word><Word>oct</Word>
+      <Word>odeint</Word><Word>ones</Word><Word>ones_like</Word><Word>opensees</Word><Word>optimize</Word><Word>ord</Word><Word>outer</Word><Word>path</Word>
+      <Word>pdf</Word><Word>pdist</Word><Word>perf_counter</Word><Word>pi</Word><Word>pinv</Word><Word>platform</Word><Word>pow</Word><Word>power</Word>
+      <Word>ppf</Word><Word>print</Word><Word>prod</Word><Word>qr</Word><Word>quad</Word><Word>rad2deg</Word><Word>radians</Word><Word>range</Word>
+      <Word>ravel</Word><Word>real</Word><Word>realpath</Word><Word>repr</Word><Word>reshape</Word><Word>reversed</Word><Word>rfft</Word><Word>rfftfreq</Word>
+      <Word>root</Word><Word>round</Word><Word>savemat</Word><Word>savetxt</Word><Word>sep</Word><Word>set</Word><Word>setdiff1d</Word><Word>sf</Word>
+      <Word>sign</Word><Word>signal</Word><Word>simpson</Word><Word>sin</Word><Word>sinh</Word><Word>sleep</Word><Word>solid3d_viewer</Word><Word>solve</Word>
+      <Word>solve_ivp</Word><Word>solve_triangular</Word><Word>sorted</Word><Word>sparse</Word><Word>spatial</Word><Word>special</Word><Word>split</Word><Word>splitext</Word>
+      <Word>splu</Word><Word>spsolve</Word><Word>sqrt</Word><Word>stats</Word><Word>stderr</Word><Word>stdout</Word><Word>str</Word><Word>sum</Word>
+      <Word>svd</Word><Word>tan</Word><Word>tanh</Word><Word>tau</Word><Word>time</Word><Word>tmean</Word><Word>toarray</Word><Word>tolist</Word>
+      <Word>trace</Word><Word>transpose</Word><Word>trapezoid</Word><Word>trapz</Word><Word>trunc</Word><Word>tuple</Word><Word>type</Word><Word>unique</Word>
+      <Word>unravel_index</Word><Word>version</Word><Word>vstack</Word><Word>windows</Word><Word>zeros</Word><Word>zeros_like</Word><Word>zip</Word>
+    </Keywords>
+
+    <!-- numeros: 25, 3.14, 1e-3, .5, 0x1f, 0b1010, 3j -->
+    <Rule color="Number">
+      \b0[xX][0-9a-fA-F_]+ | \b0[bB][01_]+ | \b0[oO][0-7_]+
+      |
+      \b\d[\d_]*(\.\d*)?([eE][+-]?\d+)?[jJ]?
+      |
+      \.\d[\d_]*([eE][+-]?\d+)?[jJ]?
+    </Rule>
+
+  </RuleSet>
+</SyntaxDefinition>
