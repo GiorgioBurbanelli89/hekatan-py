@@ -384,7 +384,11 @@ namespace Calcpad.Wpf
         {
             if (!EditorPlegableActivo || !_avalonListo) return false;
 
-            _panelBuscar ??= ICSharpCode.AvalonEdit.Search.SearchPanel.Install(AvalonEditor);
+            if (_panelBuscar is null)
+            {
+                _panelBuscar = ICSharpCode.AvalonEdit.Search.SearchPanel.Install(AvalonEditor);
+                VestirBuscador();
+            }
 
             var sel = AvalonEditor.SelectedText;
             if (!string.IsNullOrEmpty(sel) && !sel.Contains('\n'))
@@ -463,6 +467,32 @@ namespace Calcpad.Wpf
             foreach (var f in _foldingManager.AllFoldings) f.IsFolded = false;
         }
 
+        /// <summary>EL SALTO DESDE EL REPORTE. Pulsar el numero de una linea del reporte tiene
+        /// que llevar el cursor a ESA linea del editor que se VE. Sin esto se movia el cursor
+        /// del RichTextBox oculto: no se veia nada y encima el foco se iba de AvalonEdit.
+        ///
+        /// Si la linea esta dentro de una carpeta cerrada, se abre: dejar el cursor donde no se
+        /// ve es igual de inutil que no saltar. Devuelve false si el editor plegable no esta
+        /// activo (entonces sigue el camino clasico del RichTextBox).</summary>
+        private bool IrALineaEnAvalon(int linea)
+        {
+            if (!EditorPlegableActivo || !_avalonListo || AvalonEditor is null) return false;
+
+            var doc = AvalonEditor.Document;
+            if (linea < 1 || doc.LineCount == 0) return false;
+            if (linea > doc.LineCount) linea = doc.LineCount;
+
+            var l = doc.GetLineByNumber(linea);
+            if (_foldingManager is not null)
+                foreach (var f in _foldingManager.GetFoldingsContaining(l.Offset))
+                    f.IsFolded = false;
+
+            AvalonEditor.CaretOffset = l.EndOffset;
+            AvalonEditor.ScrollToLine(linea);
+            AvalonEditor.Focus();
+            return true;
+        }
+
         // ---------- resaltado ----------
 
         private void CargarResaltadoPython()
@@ -476,6 +506,88 @@ namespace Calcpad.Wpf
                 AvalonEditor.SyntaxHighlighting = HighlightingLoader.Load(reader, HighlightingManager.Instance);
             }
             catch { /* sin resaltado no es critico */ }
+        }
+
+        /// <summary>Re-tiñe el resaltado según el tema (Oscuro / Oro). El <c>.xshd</c> trae los
+        /// colores del tema Oro escritos dentro; aquí se sustituyen en caliente, sin recargarlo.
+        /// Lo que NO viene del <c>.xshd</c> —los nombres del usuario, el popup y el buscador—
+        /// también sigue el tema.</summary>
+        private void AplicarColoresAvalon(bool oscuro)
+        {
+            _colorizadorSemantico.AplicarTema(oscuro);
+            VestirBuscador();
+
+            if (AvalonEditor is not null)
+            {
+                AvalonEditor.Background = (System.Windows.Media.Brush)FindResource("ThemeEditorBg");
+                AvalonEditor.Foreground = (System.Windows.Media.Brush)FindResource("ThemeText");
+                AvalonEditor.TextArea.Caret.CaretBrush = (System.Windows.Media.Brush)FindResource("ThemeAccentGold");
+            }
+
+            var hl = AvalonEditor?.SyntaxHighlighting;
+            if (hl is null) return;
+
+            void C(string nombre, string hexOscuro, string hexClaro)
+            {
+                var col = hl.GetNamedColor(nombre);
+                if (col is not null)
+                    col.Foreground = new SimpleHighlightingBrush(
+                        (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(
+                            oscuro ? hexOscuro : hexClaro));
+            }
+
+            C("Comment",   "#5AC37E", "#228B22");
+            C("Celda",     "#7BD79A", "#046A38");   // #%% celda de código
+            C("TituloDoc", "#F5C043", "#8A5A00");   // #" encabezado visible en la hoja
+            C("TextoDoc",  "#9DB8D2", "#31506E");   // #' texto visible en la hoja
+            C("Directiva", "#E5A25A", "#B06000");   // #cp #hide #show…
+            C("String",    "#E5C07B", "#A15C00");
+            C("Number",    "#9ECBFF", "#0B66C3");
+            C("Keyword",   "#C678DD", "#A626A4");
+            C("Constant",  "#56B6C2", "#0B7285");
+            C("Builtin",   "#61AFEF", "#1A56C4");
+            AvalonEditor.TextArea.TextView.Redraw();
+        }
+
+        /// <summary>El popup de AvalonEdit nace BLANCO (sus colores son fijos, no heredan del
+        /// tema): en Oscuro daba un cuadro blanco en medio del editor negro. Se le pasan los
+        /// mismos brushes de la ventana, que ya cambian solos al alternar Oscuro/Oro.</summary>
+        private void VestirPopup(CompletionWindow w)
+        {
+            try
+            {
+                var fondo = (System.Windows.Media.Brush)FindResource("ThemeEditorBg");
+                var texto = (System.Windows.Media.Brush)FindResource("ThemeText");
+                var borde = (System.Windows.Media.Brush)FindResource("ThemeButtonBorder");
+
+                w.Background = fondo;
+                w.Foreground = texto;
+                w.BorderBrush = borde;
+                w.CompletionList.Background = fondo;
+                w.CompletionList.Foreground = texto;
+                w.CompletionList.ListBox.Background = fondo;
+                w.CompletionList.ListBox.Foreground = texto;
+                w.CompletionList.ListBox.BorderBrush = borde;
+                w.FontFamily = AvalonEditor.FontFamily;
+                w.FontSize = AvalonEditor.FontSize;
+            }
+            catch { /* si falta un brush, el popup se queda con su look de fábrica */ }
+        }
+
+        /// <summary>El buscador de AvalonEdit también nace claro; se le pasan los brushes de la
+        /// ventana, como al popup.</summary>
+        private void VestirBuscador()
+        {
+            if (_panelBuscar is null) return;
+            try
+            {
+                _panelBuscar.Background = (System.Windows.Media.Brush)FindResource("ThemePanelBg");
+                _panelBuscar.Foreground = (System.Windows.Media.Brush)FindResource("ThemeText");
+                _panelBuscar.BorderBrush = (System.Windows.Media.Brush)FindResource("ThemeButtonBorder");
+                _panelBuscar.BorderThickness = new Thickness(1);
+                _panelBuscar.MarkerBrush = (System.Windows.Media.Brush)FindResource("ThemeAccentGold");
+            }
+            catch { }
         }
 
         // ---------- autocompletado ----------
@@ -544,8 +656,7 @@ namespace Calcpad.Wpf
 
             _avalonCompletion = new CompletionWindow(AvalonEditor.TextArea) { CloseWhenCaretAtBeginning = true };
             _avalonCompletion.StartOffset = AvalonEditor.CaretOffset - prefijo.Length;
-            _avalonCompletion.FontFamily = AvalonEditor.FontFamily;
-            _avalonCompletion.FontSize = AvalonEditor.FontSize;
+            VestirPopup(_avalonCompletion);
             foreach (var it in items) _avalonCompletion.CompletionList.CompletionData.Add(it);
             if (!string.IsNullOrEmpty(prefijo)) _avalonCompletion.CompletionList.SelectItem(prefijo);
             _avalonCompletion.Closed += (_, _) => _avalonCompletion = null;

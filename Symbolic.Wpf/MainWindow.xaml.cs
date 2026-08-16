@@ -632,6 +632,10 @@ namespace Calcpad.Wpf
                     WebViewer.Tag = true;
                     CodeCheckBox.IsChecked = true;
                 }
+                // Con el editor plegable delante, el salto va AHI: mover el cursor del
+                // RichTextBox oculto no se ve, y ademas le robaria el foco al editor visible.
+                else if (IrALineaEnAvalon(line))
+                    return;
                 else if (line <= _document.Blocks.Count)
                 {
                     var block = _document.Blocks.ElementAt(line - 1);
@@ -1445,6 +1449,7 @@ namespace Calcpad.Wpf
             if (isPyFile && !IsWebForm && !toWebForm)
             {
                 StartupMark("Python pure pipeline: start (streaming)");
+                _ctlUltimoMotor = "python";
                 _isParsing = true;
                 FreezeOutputButtons(true);
                 // Construir página de streaming: worksheet header + status banner +
@@ -1622,6 +1627,7 @@ namespace Calcpad.Wpf
                         _wv2Warper.Navigate(_htmlParsingPath);
                     }
                     StartupMark("Parse: start (Calcpad-Lab engine)");
+                    _ctlUltimoMotor = "calcpad";
                     void parse() => _parser.Parse(outputText);
                     await Task.Run(parse);
                     StartupMark("Parse: done (FEM solve + output HTML)");
@@ -2792,10 +2798,13 @@ namespace Calcpad.Wpf
                 else if (argv[i] == "--plegar") { }
                 else if ((argv[i] == "--completar" || argv[i] == "--buscar" ||
                           argv[i] == "--insertar" || argv[i] == "--cshot" ||
-                          argv[i] == "--marcar" || argv[i] == "--enlinea") && i + 1 < argv.Length) i++;
+                          argv[i] == "--marcar" || argv[i] == "--enlinea" || argv[i] == "--theme") && i + 1 < argv.Length) i++;
                 else if (argv[i] == "--aceptar" || argv[i] == "--doble" || argv[i] == "--clasico") { }
+                // --ctl <carpeta>: canal de control por cola de archivos (MainWindow.Ctl.cs).
+                else if (argv[i] == "--ctl" && i + 1 < argv.Length) _ctlDir = argv[++i];
                 else fileParts.Add(argv[i]);
             }
+            if (_ctlDir != null) StartControlServer();
             if (fileParts.Count > 0)
             {
                 var s = string.Join(" ", fileParts);
@@ -3856,6 +3865,14 @@ namespace Calcpad.Wpf
 
             // EDITOR PLEGABLE: montar el editor con plegado (AvalonEdit) encima del clasico.
             PrepararAvalon();
+            // TEMA HEKATAN: hay que aplicarlo aunque sea el de por defecto — los brushes del XAML
+            // son los del tema Oscuro, pero el resaltado del editor y el fondo del WebView2 no se
+            // enteran solos. `--theme dark|gold` lo fuerza, para revisar los dos en PNG.
+            var argv = Environment.GetCommandLineArgs();
+            var iT = Array.IndexOf(argv, "--theme");
+            if (iT >= 0 && iT + 1 < argv.Length)
+                _isDarkTheme = !argv[iT + 1].StartsWith("gold", StringComparison.OrdinalIgnoreCase);
+            SetTheme(_isDarkTheme);
         }
 
         private async void Include_Click(object sender, MouseButtonEventArgs e)
@@ -4897,6 +4914,10 @@ namespace Calcpad.Wpf
 
         private void CommentUncomment(bool comment)
         {
+            // EDITOR PLEGABLE: comentar con '#' y respetando la sangria (el de Calcpad ponia
+            // una comilla ' delante, que en Python es el principio de una cadena).
+            if (ComentarEnAvalon(comment)) return;
+
             var ss = RichTextBox.Selection.Start;
             var ps = ss.Paragraph;
             var se = RichTextBox.Selection.End;
