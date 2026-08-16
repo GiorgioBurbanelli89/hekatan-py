@@ -2793,7 +2793,7 @@ namespace Calcpad.Wpf
                 else if ((argv[i] == "--completar" || argv[i] == "--buscar" ||
                           argv[i] == "--insertar" || argv[i] == "--cshot" ||
                           argv[i] == "--marcar" || argv[i] == "--enlinea") && i + 1 < argv.Length) i++;
-                else if (argv[i] == "--aceptar" || argv[i] == "--doble") { }
+                else if (argv[i] == "--aceptar" || argv[i] == "--doble" || argv[i] == "--clasico") { }
                 else fileParts.Add(argv[i]);
             }
             if (fileParts.Count > 0)

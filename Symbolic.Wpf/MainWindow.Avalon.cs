@@ -73,6 +73,17 @@ namespace Calcpad.Wpf
                     TrasUnRato(900, () => { CapturarPantalla(png); Environment.Exit(0); });
                 });
 
+            // --clasico [--cshot <png>]: desmarca la casilla, para comprobar en PNG que el
+            // editor de siempre (RichTextBox) sigue vivo detras.
+            if (argv.Any(a => a == "--clasico"))
+                TrasUnRato(1400, () =>
+                {
+                    EditorPlegableChk.IsChecked = false;
+                    var png = ValorDe(argv, "--cshot");
+                    if (png is null) return;
+                    TrasUnRato(900, () => { CapturarPantalla(png); Environment.Exit(0); });
+                });
+
             PrepararCapturaAutocompletado();
             PrepararCapturaBusqueda();
             PrepararCapturaInsercion();
