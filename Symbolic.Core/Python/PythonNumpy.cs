@@ -113,10 +113,25 @@ namespace Calcpad.Core.Python
         // ── indexado avanzado: A[intarray] (gather 1D) y A[np.ix_(r,c)] (submatriz 2D) ──
         public PyNdArray Gather(int[] idx)
         {
+            // numpy: A[intarray] sobre una MATRIZ toma FILAS enteras (resultado len(idx) x Cols).
+            // Antes se tomaban elementos sueltos del Data plano: `XY[nd]` devolvia basura
+            // (medido con el talud Demo04: dJ=0 en todos los elementos).
+            if (Ndim == 2) return GatherRows(idx);
             var d = new double[idx.Length];
             int n = Shape[0];
             for (int k = 0; k < idx.Length; k++) d[k] = Data[Norm(idx[k], n)];
             return new PyNdArray(d, new[] { idx.Length }, IsInt);
+        }
+        public PyNdArray GatherRows(int[] rows)
+        {
+            int R = rows.Length, C = Cols;
+            var d = new double[R * C];
+            for (int i = 0; i < R; i++)
+            {
+                int ri = Norm(rows[i], Rows);
+                Array.Copy(Data, ri * C, d, i * C, C);
+            }
+            return new PyNdArray(d, new[] { R, C }, IsInt);
         }
         public PyNdArray Submatrix(int[] rows, int[] cols)
         {
@@ -333,6 +348,16 @@ namespace Calcpad.Core.Python
             Reg("cumsum", (a, kw) => { var x = AsArr(a[0]); var d = new double[x.Size]; double s = 0; for (int i = 0; i < x.Size; i++) { s += x.Data[i]; d[i] = s; } return new PyNdArray(d, new[] { x.Size }); });
             Reg("diff", (a, kw) => { var x = AsArr(a[0]); int n = x.Size - 1; var d = new double[n < 0 ? 0 : n]; for (int i = 0; i < n; i++) d[i] = x.Data[i + 1] - x.Data[i]; return new PyNdArray(d, new[] { d.Length }); });
             Reg("isnan", (a, kw) => UFunc(a[0], v => double.IsNaN(v) ? 1.0 : 0.0));
+            // Faltaban (medido con el talud Demo04 en el motor nativo, 2026-09-02):
+            Reg("isfinite", (a, kw) => UFunc(a[0], v => double.IsFinite(v) ? 1.0 : 0.0));
+            Reg("isinf", (a, kw) => UFunc(a[0], v => double.IsInfinity(v) ? 1.0 : 0.0));
+            Reg("arctan", (a, kw) => UFunc(a[0], Math.Atan));
+            Reg("arcsin", (a, kw) => UFunc(a[0], Math.Asin));
+            Reg("arccos", (a, kw) => UFunc(a[0], Math.Acos));
+            Reg("arctan2", (a, kw) => EwiseBin(a[0], a[1], Math.Atan2));
+            Reg("hypot", (a, kw) => EwiseBin(a[0], a[1], (x, y) => Math.Sqrt(x * x + y * y)));
+            Reg("all", (a, kw) => { var z = AsArr(a[0]); foreach (var v in z.Data) if (v == 0.0) return (object)false; return (object)true; });
+            Reg("any", (a, kw) => { var z = AsArr(a[0]); foreach (var v in z.Data) if (v != 0.0) return (object)true; return (object)false; });
             Reg("unravel_index", (a, kw) => Unravel(a));
             // conjuntos e indexado avanzado (para ensamble FEM: free = setdiff1d(...), K[np.ix_(free,free)])
             Reg("setdiff1d", (a, kw) => Setdiff1d(AsArr(a[0]), AsArr(a[1])));
