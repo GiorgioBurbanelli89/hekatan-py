@@ -125,13 +125,26 @@ namespace Calcpad.Core.Python
             _htmlBlock = false;   // estado limpio de bloque HTML al arrancar el render
             var sb = new StringBuilder();
             var dispBuffer = new StringBuilder();
-            _evaluator.Output = msg => dispBuffer.Append(msg);
+            int lastLine = -1;
+            int pendingStart = sb.Length, pendingLine = -1;
+            // VOLCADO EN VIVO de los print(): un bucle largo (el talud: 50-100 s) es UNA sentencia y antes
+            // no se veia nada hasta que acababa ("parece que no corre"). Ahora, en modo streaming, los
+            // prints se mandan al panel cada ~250 ms mientras la sentencia sigue ejecutandose.
+            var liveClock = System.Diagnostics.Stopwatch.StartNew(); bool liveOk = true;
+            _evaluator.Output = msg =>
+            {
+                dispBuffer.Append(msg);
+                if (StreamingMode && liveOk && StatementCompleted != null && msg.EndsWith("\n") && liveClock.ElapsedMilliseconds > 250)
+                {
+                    var rawLive = dispBuffer.ToString(); dispBuffer.Clear();
+                    sb.Append(RenderStdout(rawLive));
+                    StatementCompleted.Invoke(pendingLine < 0 ? 0 : pendingLine, sb.ToString(pendingStart, sb.Length - pendingStart));
+                    pendingStart = sb.Length; liveClock.Restart();
+                }
+            };
             _evaluator.HtmlOut = html => sb.Append(html);
 
             string LineLink(int line) => $"[<a href=\"#0\" data-text=\"{line}\">{line}</a>]";
-
-            int lastLine = -1;
-            int pendingStart = sb.Length, pendingLine = -1;
 
             void FlushDisp(int line)
             {
@@ -157,9 +170,11 @@ namespace Calcpad.Core.Python
                 {
                     if (stmt is not CommentStmt)
                     {
+                        liveOk = false;   // en bloque oculto no se vuelca nada en vivo
                         try { _evaluator.ExecuteOne(stmt, _evaluator.Globals); }
                         catch (PythonNotSupported) { throw; }
                         catch { /* en bloque oculto no rompemos el reporte por un error de una línea */ }
+                        finally { liveOk = true; }
                         dispBuffer.Clear();   // descartar prints emitidos dentro del bloque oculto
                     }
                     continue;
