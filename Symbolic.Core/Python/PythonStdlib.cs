@@ -1,5 +1,5 @@
 // Stdlib EMBEBIDA para Hekatan Python3 — sys / time / os (os.path) nativos, sin Python externo.
-// Cubre lo que usan los scripts FEM: sys.argv, time.time/perf_counter, os.path.dirname/abspath/join/exists.
+// Cubre lo que usan los scripts FEM: sys.argv, time.time/perf_counter, os.path.dirname/abspath/join/exists, os.environ/getenv.
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -58,6 +58,18 @@ namespace Calcpad.Core.Python
                 try { foreach (var e in Directory.GetFileSystemEntries(dir)) l.Items.Add(Path.GetFileName(e)); } catch { }
                 return l;
             });
+            // os.environ / os.getenv (2026-09-04): el talud GEO5 leia variables (GEO5_SRFROUND, HK_DUMP) y el
+            // motor nativo no las tenia -> "module 'os' has no attribute 'environ'". Copia del entorno del proceso.
+            var env = new PyDict();
+            foreach (System.Collections.DictionaryEntry de in Environment.GetEnvironmentVariables())
+                if (de.Key is string ek) env.Set(ek, de.Value?.ToString() ?? "");
+            os.Attrs["environ"] = env;
+            os.Attrs["getenv"] = new PyBuiltin("getenv", (a, kw) =>
+            {
+                var k = PyOps.Str(a[0]); var v = Environment.GetEnvironmentVariable(k);
+                return v ?? (a.Length > 1 ? a[1] : null);
+            });
+            os.Attrs["putenv"] = new PyBuiltin("putenv", (a, kw) => { try { Environment.SetEnvironmentVariable(PyOps.Str(a[0]), PyOps.Str(a[1])); env.Set(PyOps.Str(a[0]), PyOps.Str(a[1])); } catch { } return null; });
             os.Attrs["makedirs"] = new PyBuiltin("makedirs", (a, kw) => { try { Directory.CreateDirectory(PyOps.Str(a[0])); } catch { } return null; });
             os.Attrs["mkdir"] = new PyBuiltin("mkdir", (a, kw) => { try { Directory.CreateDirectory(PyOps.Str(a[0])); } catch { } return null; });
 

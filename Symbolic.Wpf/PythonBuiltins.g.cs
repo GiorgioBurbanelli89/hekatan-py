@@ -19,18 +19,19 @@ internal static class PythonBuiltins
         "str", "sum", "tuple", "type", "zip",
     };
 
-    /// <summary>Lo que expone <c>numpy</c> (95 nombres).</summary>
+    /// <summary>Lo que expone <c>numpy</c> (104 nombres).</summary>
     private static readonly string[] _numpy =
     {
-        "abs", "absolute", "amax", "amin", "angle", "arange", "argmax", "argmin", "around", "array", "asarray",
-        "astype", "ceil", "clip", "column_stack", "concatenate", "conj", "copy", "cos", "cumsum", "deg2rad",
-        "degrees", "det", "diag", "diff", "dot", "e", "eig", "eigh", "eigvals", "eigvalsh", "exp", "eye",
-        "fft", "flatten", "float64", "float_", "floor", "full", "genfromtxt", "hstack", "identity", "imag",
-        "inf", "int64", "int_", "interp", "inv", "isnan", "ix_", "linalg", "linspace", "loadtxt", "log",
-        "matmul", "max", "maximum", "mean", "meshgrid", "min", "minimum", "nan", "nanmax", "nanmin", "newaxis",
-        "norm", "ones", "ones_like", "outer", "pi", "power", "prod", "rad2deg", "radians", "ravel", "real",
-        "reshape", "round", "savetxt", "setdiff1d", "sign", "sin", "solve", "spsolve", "sqrt", "sum", "tan",
-        "tolist", "trace", "transpose", "unique", "unravel_index", "vstack", "zeros", "zeros_like",
+        "abs", "absolute", "all", "amax", "amin", "angle", "any", "arange", "arccos", "arcsin", "arctan",
+        "arctan2", "argmax", "argmin", "around", "array", "asarray", "astype", "ceil", "clip", "column_stack",
+        "concatenate", "conj", "copy", "cos", "cumsum", "deg2rad", "degrees", "det", "diag", "diff", "dot",
+        "e", "eig", "eigh", "eigvals", "eigvalsh", "exp", "eye", "fft", "flatten", "float64", "float_",
+        "floor", "full", "genfromtxt", "hstack", "hypot", "identity", "imag", "inf", "int64", "int_", "interp",
+        "inv", "isfinite", "isinf", "isnan", "ix_", "linalg", "linspace", "loadtxt", "log", "matmul", "max",
+        "maximum", "mean", "meshgrid", "min", "minimum", "nan", "nanmax", "nanmin", "newaxis", "norm", "ones",
+        "ones_like", "outer", "pi", "power", "prod", "rad2deg", "radians", "ravel", "real", "reshape", "round",
+        "savetxt", "setdiff1d", "sign", "sin", "solve", "spsolve", "sqrt", "sum", "tan", "tolist", "trace",
+        "transpose", "unique", "unravel_index", "vstack", "zeros", "zeros_like",
     };
 
     /// <summary>Lo que expone <c>math</c> (43 nombres).</summary>
@@ -58,11 +59,12 @@ internal static class PythonBuiltins
         "windows",
     };
 
-    /// <summary>Lo que expone <c>os</c> (18 nombres).</summary>
+    /// <summary>Lo que expone <c>os</c> (21 nombres).</summary>
     private static readonly string[] _os =
     {
-        "abspath", "basename", "dirname", "exists", "getcwd", "isdir", "isfile", "join", "linesep", "listdir",
-        "makedirs", "mkdir", "name", "path", "realpath", "sep", "split", "splitext",
+        "abspath", "basename", "dirname", "environ", "exists", "getcwd", "getenv", "isdir", "isfile", "join",
+        "linesep", "listdir", "makedirs", "mkdir", "name", "path", "putenv", "realpath", "sep", "split",
+        "splitext",
     };
 
     /// <summary>Lo que expone <c>sys</c> (10 nombres).</summary>
@@ -95,30 +97,31 @@ internal static class PythonBuiltins
         ["collections"] = _collections,
     };
 
-    /// <summary>Todos los nombres del motor (271), sin repetir: es lo que colorea el editor.</summary>
+    /// <summary>Todos los nombres del motor (278), sin repetir: es lo que colorea el editor.</summary>
     internal static readonly string[] All =
     {
         "Counter", "CubicSpline", "OrderedDict", "abs", "absolute", "abspath", "acos", "acosh", "all", "amax",
-        "amin", "angle", "any", "arange", "argmax", "argmin", "argv", "around", "array", "asarray", "asin",
-        "asinh", "astype", "atan", "atan2", "atanh", "basename", "bin", "bisect", "blackman", "bool", "brentq",
-        "butter", "cdf", "cdist", "ceil", "cholesky", "chr", "cityblock", "clip", "column_stack", "comb",
-        "concatenate", "conj", "convolve", "coo_matrix", "copy", "copysign", "correlate", "cos", "cosh",
-        "csc_matrix", "csr_matrix", "cumsum", "cumtrapz", "cumulative_trapezoid", "curve_fit", "defaultdict",
-        "deg2rad", "degrees", "det", "diag", "diags", "dict", "diff", "dirname", "dist", "distance", "divmod",
-        "dot", "e", "eig", "eig_sym", "eigh", "eigvals", "eigvalsh", "enumerate", "erf", "erfc", "erfinv",
-        "euclidean", "executable", "exists", "exit", "exp", "expm", "expm1", "eye", "fabs", "factorial",
-        "factorized", "fft", "fftfreq", "filter", "filtfilt", "find_peaks", "flatten", "float", "float64",
-        "float_", "floor", "fmod", "format", "frozenset", "fsolve", "full", "gamma", "gammainc", "gammaln",
-        "gcd", "genfromtxt", "getcwd", "hamming", "hann", "hex", "hstack", "hypot", "identity", "ifft", "imag",
-        "inf", "input", "int", "int64", "int_", "integrate", "interp", "interp1d", "interpolate", "inv", "io",
-        "irfft", "isdir", "isfile", "isfinite", "isinf", "isinstance", "isnan", "ix_", "join", "lcm",
-        "least_squares", "len", "lfilter", "lil_matrix", "linalg", "linesep", "linspace", "list", "listdir",
-        "loadmat", "loadtxt", "log", "log10", "log1p", "log2", "lstsq", "lu", "makedirs", "map", "matmul",
-        "max", "maximum", "maxsize", "mean", "mesh3d", "mesh3d_viewer", "mesh_viewer", "meshgrid", "min",
-        "minimize", "minimize_scalar", "minimum", "mkdir", "modules", "monotonic", "name", "nan", "nanmax",
-        "nanmin", "newaxis", "newton", "norm", "oct", "odeint", "ones", "ones_like", "opensees", "optimize",
-        "ord", "outer", "path", "pdf", "pdist", "perf_counter", "pi", "pinv", "platform", "pow", "power",
-        "ppf", "print", "prod", "qr", "quad", "rad2deg", "radians", "range", "ravel", "real", "realpath",
+        "amin", "angle", "any", "arange", "arccos", "arcsin", "arctan", "arctan2", "argmax", "argmin", "argv",
+        "around", "array", "asarray", "asin", "asinh", "astype", "atan", "atan2", "atanh", "basename", "bin",
+        "bisect", "blackman", "bool", "brentq", "butter", "cdf", "cdist", "ceil", "cholesky", "chr",
+        "cityblock", "clip", "column_stack", "comb", "concatenate", "conj", "convolve", "coo_matrix", "copy",
+        "copysign", "correlate", "cos", "cosh", "csc_matrix", "csr_matrix", "cumsum", "cumtrapz",
+        "cumulative_trapezoid", "curve_fit", "defaultdict", "deg2rad", "degrees", "det", "diag", "diags",
+        "dict", "diff", "dirname", "dist", "distance", "divmod", "dot", "e", "eig", "eig_sym", "eigh",
+        "eigvals", "eigvalsh", "enumerate", "environ", "erf", "erfc", "erfinv", "euclidean", "executable",
+        "exists", "exit", "exp", "expm", "expm1", "eye", "fabs", "factorial", "factorized", "fft", "fftfreq",
+        "filter", "filtfilt", "find_peaks", "flatten", "float", "float64", "float_", "floor", "fmod", "format",
+        "frozenset", "fsolve", "full", "gamma", "gammainc", "gammaln", "gcd", "genfromtxt", "getcwd", "getenv",
+        "hamming", "hann", "hex", "hstack", "hypot", "identity", "ifft", "imag", "inf", "input", "int",
+        "int64", "int_", "integrate", "interp", "interp1d", "interpolate", "inv", "io", "irfft", "isdir",
+        "isfile", "isfinite", "isinf", "isinstance", "isnan", "ix_", "join", "lcm", "least_squares", "len",
+        "lfilter", "lil_matrix", "linalg", "linesep", "linspace", "list", "listdir", "loadmat", "loadtxt",
+        "log", "log10", "log1p", "log2", "lstsq", "lu", "makedirs", "map", "matmul", "max", "maximum",
+        "maxsize", "mean", "mesh3d", "mesh3d_viewer", "mesh_viewer", "meshgrid", "min", "minimize",
+        "minimize_scalar", "minimum", "mkdir", "modules", "monotonic", "name", "nan", "nanmax", "nanmin",
+        "newaxis", "newton", "norm", "oct", "odeint", "ones", "ones_like", "opensees", "optimize", "ord",
+        "outer", "path", "pdf", "pdist", "perf_counter", "pi", "pinv", "platform", "pow", "power", "ppf",
+        "print", "prod", "putenv", "qr", "quad", "rad2deg", "radians", "range", "ravel", "real", "realpath",
         "repr", "reshape", "reversed", "rfft", "rfftfreq", "root", "round", "savemat", "savetxt", "sep", "set",
         "setdiff1d", "sf", "sign", "signal", "simpson", "sin", "sinh", "sleep", "solid3d_viewer", "solve",
         "solve_ivp", "solve_triangular", "sorted", "sparse", "spatial", "special", "split", "splitext", "splu",

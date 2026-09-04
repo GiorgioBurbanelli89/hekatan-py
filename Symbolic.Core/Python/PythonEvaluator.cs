@@ -1606,7 +1606,9 @@ namespace Calcpad.Core.Python
             Reg("dict", (a, kw) =>
             {
                 var d = new PyDict();
-                if (a.Length > 0) foreach (var pair in Iterate(a[0])) { var it = new List<object>(Iterate(pair)); d.Set(it[0], it[1]); }
+                if (a.Length > 0 && a[0] is PyDict src)   // dict(otro_dict) = copia (2026-09-04: antes iteraba las CLAVES como pares -> IndexOutOfRange)
+                    for (int i = 0; i < src.Keys.Count; i++) d.Set(src.Keys[i], src.Values[i]);
+                else if (a.Length > 0) foreach (var pair in Iterate(a[0])) { var it = new List<object>(Iterate(pair)); d.Set(it[0], it[1]); }
                 if (kw != null) for (int i = 0; i < kw.Keys.Count; i++) d.Set(kw.Keys[i], kw.Values[i]);
                 return d;
             });
