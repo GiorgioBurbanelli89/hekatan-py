@@ -46,7 +46,7 @@ namespace Calcpad.Core.Python
         private TclInterop _opensees;   // intérprete OpenSees nativo (MKL Pardiso+JIT), creado on-demand
 
         private static readonly HashSet<string> NativeModules = new(StringComparer.Ordinal)
-        { "math", "cmath", "openseespy", "opensees", "openseespywin", "numpy", "scipy", "sys", "time", "os", "collections" };
+        { "math", "cmath", "openseespy", "opensees", "openseespywin", "numpy", "scipy", "sys", "time", "os", "collections", "pyvista" };
 
         public PythonEvaluator()
         {
@@ -352,6 +352,8 @@ namespace Calcpad.Core.Python
             if (name == "time") return _timeModule ??= PythonStdlib.Time();
             if (name == "os") return _osModule ??= PythonStdlib.Os(RealPython.ScriptDirectory);
             if (name == "collections") return _collectionsModule ??= BuildCollections();
+            // pyvista EMBEBIDO (mallas + Plotter.show -> visor 3D orbitable). Lo no cubierto cae a Python real.
+            if (name == "pyvista") return _pvModule ??= PythonPyVista.CreateModule(HtmlOut, () => "pv" + (++_vizId));
             // Modulo .py LOCAL (hermano del script): parsear+ejecutar como modulo -> import fem_helper OK nativo.
             var local = LoadLocalModule(name);
             if (local != null) return local;
@@ -389,6 +391,7 @@ namespace Calcpad.Core.Python
         }
         private PyModule _opsModule;
         private PyModule _numpyModule;
+        private PyModule _pvModule;
         private PyModule _scipyModule;
         private PyModule _sysModule, _timeModule, _osModule, _collectionsModule;
 
@@ -1183,6 +1186,9 @@ namespace Calcpad.Core.Python
                         if (cv is PyFunction pf) return new PyBoundMethod { Func = pf, Self = inst };
                         return cv;
                     }
+                    // Objeto de un modulo nativo parcial (pyvista): lo que no esta -> Python real (que lo tiene entero)
+                    if (inst.Class != null && inst.Class.Attrs.ContainsKey("__pyvista__"))
+                        throw new PythonNotSupported($"pyvista: {inst.Class.Name}.{name}");
                     throw new PyRuntimeError("AttributeError", $"'{inst.Class?.Name}' object has no attribute '{name}'");
                 }
                 case PyClass cls:

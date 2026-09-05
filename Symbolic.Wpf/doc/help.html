@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Hekatan Python3 — Ayuda</title>
+<style>
+  body { font-family: Segoe UI, sans-serif; max-width: 900px; margin: 1.5em auto; padding: 0 1em; line-height: 1.45; color: #222; }
+  h1 { border-bottom: 2px solid #c9a227; padding-bottom: .2em; }
+  h2 { margin-top: 1.6em; color: #7a5c00; }
+  code, pre { font-family: Consolas, monospace; background: #f4f1e8; }
+  pre { padding: .6em .8em; overflow-x: auto; border-left: 3px solid #c9a227; }
+  code { padding: 0 .25em; }
+  table { border-collapse: collapse; margin: .6em 0; }
+  td, th { border: 1px solid #ccc; padding: .25em .6em; vertical-align: top; }
+  th { background: #f4f1e8; text-align: left; }
+  .nota { background: #fff8dc; border-left: 3px solid #c9a227; padding: .5em .8em; margin: .8em 0; }
+</style>
+</head>
+<body>
+<h1>Hekatan Python3</h1>
+<p>Escribes <strong>Python normal</strong> en el editor de la izquierda y la hoja de la derecha muestra el
+resultado: lo que asignas, lo que imprimes, las gráficas y el texto que pongas en comentarios visibles.
+El archivo es un <code>.py</code> corriente: se abre y corre en cualquier Python.</p>
+
+<h2>Cómo se ejecuta</h2>
+<ul>
+  <li><strong>Motor nativo.</strong> El programa trae su propio intérprete de Python con <code>math</code>,
+      <code>numpy</code>, <code>scipy.sparse</code>, <code>time</code>, <code>sys</code>, <code>os</code> y
+      <code>matplotlib.pyplot</code> embebidos. No hace falta instalar nada.</li>
+  <li><strong>Python real.</strong> Si el guion usa algo que el motor nativo no tiene, se ejecuta con el
+      Python del entorno elegido en el menú <em>Python</em> (venv, conda o el del sistema). La salida
+      llega línea a línea a la hoja.</li>
+  <li>Un guion puede fijar su entorno con la directiva <code>#venv ruta</code> (o <code>#env</code>).</li>
+  <li><strong>AutoRun</strong> (casilla de la barra): el guion se ejecuta al abrirlo y al modificarlo.
+      Mientras corre, la hoja muestra un aviso y va pintando lo que se imprime dentro de los bucles.</li>
+</ul>
+
+<h2>Comentarios que se ven en la hoja</h2>
+<p>Un comentario normal (<code># texto</code>) es <strong>oculto</strong>. Para escribir en la hoja se usa
+<code>#'</code> y <code>#"</code>; todo va dentro del comentario, así el <code>.py</code> sigue siendo Python válido.</p>
+<table>
+<tr><th>Escribes</th><th>Sale en la hoja</th></tr>
+<tr><td><code>#' texto</code></td><td>Párrafo de texto (admite Markdown: <code>**negrita**</code>, <code>_cursiva_</code>, listas, tablas).</td></tr>
+<tr><td><code>#" Título</code></td><td>Título centrado, negrita, color de acento.</td></tr>
+<tr><td><code>#"{rojo} Título</code></td><td>Título con color (negro, azul, rojo, verde, gris, naranja, morado o <code>#hex</code>).</td></tr>
+<tr><td><code>#'| texto</code> · <code>#'&gt; texto</code> · <code>#'&lt; texto</code></td><td>Centrado · a la derecha · a la izquierda.</td></tr>
+<tr><td><code>#'* texto</code> · <code>#'/ texto</code> · <code>#'_ texto</code></td><td>Negrita · itálica · subrayado.</td></tr>
+<tr><td><code>#'{azul,|,*} texto</code></td><td>Color, alineación y estilo combinados.</td></tr>
+<tr><td><code>#'-----</code></td><td>Línea horizontal.</td></tr>
+<tr><td><code>#'&lt;table&gt;...&lt;/table&gt;</code></td><td>HTML dentro del comentario (tablas con bordes, etc.).</td></tr>
+<tr><td><code>#'\ texto</code></td><td>Muestra el resto literal (para usar <code>&lt; &gt; | * / _ -----</code> como texto).</td></tr>
+<tr><td><code>#noc expr</code></td><td>Fórmula tipografiada sin evaluar.</td></tr>
+<tr><td><code>#cp expr</code></td><td>Fórmula tipografiada en la hoja.</td></tr>
+<tr><td><code>#cp[</code> … <code>#cp]</code></td><td>Bloque de fórmulas tipografiadas que además se <strong>evalúan</strong> (derivadas, integrales, límites, factorizar, resolver, Taylor, jacobiano, LaTeX). Va entero dentro de comentarios.</td></tr>
+<tr><td><code>#%% Nombre</code></td><td>Celda de código: se pliega en el editor y no sale en la hoja.</td></tr>
+<tr><td><code>#hide</code> … <code>#show</code></td><td>Lo de dentro se ejecuta pero no se muestra nada.</td></tr>
+<tr><td><code>#show variable</code></td><td>Muestra solo esa variable, en línea.</td></tr>
+<tr><td><code>''' … '''</code></td><td>Bloque que no se ejecuta ni se muestra.</td></tr>
+</table>
+
+<h2>Botones de marcado</h2>
+<p>Los botones <strong>H1 H2 H3 H4 p br B I U S x₂ x² R G &lt;/&gt; div</strong> y los de listas y tabla escriben
+en la línea del cursor si es un comentario visible; si la línea tiene código, bajan a una línea
+<code>#'</code> nueva para no romperlo. Pulsados de nuevo quitan la marca. Los botones
+<strong># # #'</strong> de la barra comentan la línea (oculto, celda, visible).</p>
+
+<h2>Menús</h2>
+<ul>
+  <li><strong>Archivo:</strong> nuevo, abrir, recientes, guardar, guardar como, intérprete de línea de comandos, visor de Excel, salir.</li>
+  <li><strong>Editar:</strong> buscar, reemplazar, deshacer, rehacer, cortar, copiar, pegar, pegar como comentario,
+      comentar (Ctrl+R) y descomentar (Ctrl+T) las líneas seleccionadas, seleccionar todo.</li>
+  <li><strong>Insertar:</strong> comentarios y secciones, constantes (<code>math.pi</code>, <code>math.e</code>, <code>1j</code>…),
+      operadores, funciones (<code>math</code>, redondeo, trigonométricas, hiperbólicas, complejos),
+      arrays y matrices (<code>numpy</code>), agregados e interpolación, condicionales y bucles,
+      salida y cadenas (<code>print</code>, f-strings), gráficas 2D y 3D (<code>matplotlib</code>).
+      Cada entrada dice su equivalente de MATLAB para quien viene de allí.</li>
+  <li><strong>Salida:</strong> calcular, guardar, copiar, imprimir, abrir con Word, guardar como PDF, tema Oscuro/Oro (Ctrl+Shift+T).</li>
+  <li><strong>Python:</strong> entornos detectados, agregar o crear un entorno, instalar numpy/scipy/matplotlib, verificar librerías, abrir la carpeta del entorno.</li>
+</ul>
+
+<h2>Editor</h2>
+<ul>
+  <li><strong>Plegado</strong> (casilla de la barra): editor con carpetas plegables por sangría; las celdas <code>#%%</code> y las funciones se pliegan.</li>
+  <li>Autocompletado tras el punto (<code>np.</code>, <code>math.</code>, <code>plt.</code>).</li>
+  <li>Clic en una línea de la hoja lleva a la línea del código.</li>
+</ul>
+
+<h2>PyVista embebido (3D)</h2>
+<p><code>import pyvista as pv</code> funciona sin instalar nada: las mallas se construyen en el motor y
+<code>Plotter.show()</code> o <code>mesh.plot()</code> las dibujan en la hoja con el visor 3D orbitable
+(arrastrar = girar, rueda = zoom, pasar el ratón = valor; paleta jet_r y barra de color).</p>
+<table>
+<tr><th>Soportado</th><th>Notas</th></tr>
+<tr><td><code>pv.PolyData(points, faces)</code></td><td><code>faces</code> en formato VTK plano <code>[n, i, j, k, …]</code> o matriz n×k.</td></tr>
+<tr><td><code>pv.UnstructuredGrid(cells, celltypes, points)</code> · <code>pv.UnstructuredGrid({tipo: conn}, points)</code></td><td>Hexaedros, tetraedros, cuñas, pirámides, cuadriláteros, triángulos (<code>pv.CellType.HEXAHEDRON</code>…). Se dibuja la piel exterior.</td></tr>
+<tr><td><code>pv.StructuredGrid(X, Y, Z)</code></td><td>Superficies <code>z = f(x, y)</code> con matrices 2D.</td></tr>
+<tr><td><code>pv.Sphere · Cube · Plane · Cylinder</code></td><td>Primitivas con sus parámetros habituales.</td></tr>
+<tr><td><code>mesh.point_data["u"] = …</code> · <code>mesh.cell_data["dano"] = …</code></td><td>Campos por nodo (degradado) o por celda (color plano por celda, como PyVista).</td></tr>
+<tr><td><code>pl.add_mesh(mesh, scalars="nombre")</code></td><td>Sin <code>scalars</code> usa el último campo añadido; sin campos, gris.</td></tr>
+<tr><td><code>mesh.warp_by_vector("u", factor)</code> · <code>copy()</code> · <code>n_points</code> · <code>n_cells</code> · <code>bounds</code> · <code>center</code></td><td>Deformada a escala para FEM.</td></tr>
+</table>
+<p>Lo que no está en esta lista (filtros, cortes, texturas, <code>pv.read</code>) hace que el guion corra
+con el Python real del entorno elegido, donde PyVista completo también se embebe en la hoja.</p>
+
+<h2>Línea de comandos</h2>
+<pre>HekatanPython3Cli.exe guion.py</pre>
+<p>Genera <code>guion.html</code> junto al guion, con la misma hoja que la ventana. Sirve para lotes y para
+comprobar un guion sin abrir la ventana.</p>
+
+<div class="nota">Los comentarios visibles y los bloques de fórmulas son comentarios de Python: otro intérprete
+los ignora y el guion sigue funcionando igual.</div>
+</body>
+</html>

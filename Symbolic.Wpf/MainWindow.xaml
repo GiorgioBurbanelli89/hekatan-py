@@ -377,7 +377,7 @@
               Foreground="{DynamicResource ThemeText}">
             <MenuItem Foreground="{DynamicResource ThemeText}">
                 <MenuItem.Header>
-                    <TextBlock Text="{x:Static wpf:MainWindowResources.File}" Foreground="{DynamicResource ThemeText}"/>
+                    <AccessText Text="{x:Static wpf:MainWindowResources.File}" Foreground="{DynamicResource ThemeText}"/>
                 </MenuItem.Header>
                 <MenuItem Command="ApplicationCommands.New" 
                           Header="{x:Static wpf:MainWindowResources.New}"/>
@@ -406,7 +406,7 @@
             </MenuItem>
             <MenuItem x:Name="MenuEdit" Foreground="{DynamicResource ThemeText}">
                 <MenuItem.Header>
-                    <TextBlock Text="{x:Static wpf:MainWindowResources.Edit}" Foreground="{DynamicResource ThemeText}"/>
+                    <AccessText Text="{x:Static wpf:MainWindowResources.Edit}" Foreground="{DynamicResource ThemeText}"/>
                 </MenuItem.Header>
                 <MenuItem Command="ApplicationCommands.Find" 
                           Header="{x:Static wpf:MainWindowResources.Find}"/>
@@ -437,7 +437,7 @@
             </MenuItem>
             <MenuItem x:Name="MenuInsert" Foreground="{DynamicResource ThemeText}">
                 <MenuItem.Header>
-                    <TextBlock Text="{x:Static wpf:MainWindowResources.Insert}" Foreground="{DynamicResource ThemeText}"/>
+                    <AccessText Text="{x:Static wpf:MainWindowResources.Insert}" Foreground="{DynamicResource ThemeText}"/>
                 </MenuItem.Header>
                 <!-- ============ Hekatan Python3: menu Insert en PYTHON (ni Calcpad ni MATLAB) ============
                      Cada Tag es lo que se ESCRIBE en el editor y el Header dice exactamente eso;
@@ -716,7 +716,7 @@
             </MenuItem>
             <MenuItem x:Name="MenuOutput" Foreground="{DynamicResource ThemeText}">
                 <MenuItem.Header>
-                    <TextBlock Text="{x:Static wpf:MainWindowResources.Output}" Foreground="{DynamicResource ThemeText}"/>
+                    <AccessText Text="{x:Static wpf:MainWindowResources.Output}" Foreground="{DynamicResource ThemeText}"/>
                 </MenuItem.Header>
                 <!-- "Input Form" (Web Form) es una función de Calcpad (formulario de entrada con
                      campos ?). Hekatan Python3 es MATLAB y NO usa input fields → oculto. -->
@@ -762,7 +762,7 @@
             </MenuItem>
             <MenuItem Command="ApplicationCommands.Help" Foreground="{DynamicResource ThemeText}">
                 <MenuItem.Header>
-                    <TextBlock Text="{x:Static wpf:MainWindowResources.Help}" Foreground="{DynamicResource ThemeText}"/>
+                    <AccessText Text="{x:Static wpf:MainWindowResources.Help}" Foreground="{DynamicResource ThemeText}"/>
                 </MenuItem.Header>
             </MenuItem>
         </Menu>

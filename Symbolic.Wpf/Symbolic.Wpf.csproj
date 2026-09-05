@@ -11,7 +11,7 @@
     <Authors>Giorgio Burbanelli (Hekatan Python3 fork) — original: Nedelcho Ganchovski</Authors>
     <RootNamespace>Calcpad.Wpf</RootNamespace>
     <Platforms>AnyCPU</Platforms>
-		<Version>1.0.14</Version>
+		<Version>1.0.20</Version>
 		<Company>Hekatan</Company>
     <PackageId>HekatanPython3</PackageId>
     <Product>Hekatan Python3</Product>
@@ -73,6 +73,18 @@
     <Resource Include="resources\help.png" />
     <Resource Include="resources\image.png" />
     <Resource Include="resources\logo.png" />
+    <Resource Include="resources\graf_bar.png" />
+    <Resource Include="resources\graf_contourf.png" />
+    <Resource Include="resources\graf_hist.png" />
+    <Resource Include="resources\graf_marcadores.png" />
+    <Resource Include="resources\graf_mesh.png" />
+    <Resource Include="resources\graf_plot.png" />
+    <Resource Include="resources\graf_plot3.png" />
+    <Resource Include="resources\graf_quiver.png" />
+    <Resource Include="resources\graf_scatter.png" />
+    <Resource Include="resources\graf_stem.png" />
+    <Resource Include="resources\graf_surf.png" />
+    <Resource Include="resources\graf_varias.png" />
     <Resource Include="resources\new.png" />
     <Resource Include="resources\open.png" />
     <Resource Include="resources\paste.png" />

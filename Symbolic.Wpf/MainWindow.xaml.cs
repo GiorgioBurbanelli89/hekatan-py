@@ -4639,7 +4639,7 @@ namespace Calcpad.Wpf
 
         private void MenuCli_Click(object sender, RoutedEventArgs e)
         {
-            Execute(AppInfo.Path + "Cli.exe");
+            Execute(AppInfo.Path + "HekatanPython3Cli.exe");   // antes "Cli.exe": no existia y el menu no hacia nada (2026-09-05)
         }
 
         // ════════════════════ SELECTOR DE ENTORNOS DE PYTHON ════════════════════
