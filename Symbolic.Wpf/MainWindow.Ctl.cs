@@ -109,7 +109,7 @@ namespace Calcpad.Wpf
 
         private async Task CtlWaitCalc()
         {
-            for (var t = 0; t < 400 && _isParsing; t++) await Task.Delay(80);
+            for (var t = 0; t < 45000 && _isParsing; t++) await Task.Delay(80);   // hasta 1 h: el talud GEO5 tarda 70 s y el tope de 32 s devolvia el run a medias (2026-09-04)
             await Task.Delay(700);   // settle del render (graficas)
         }
 
@@ -119,6 +119,9 @@ namespace Calcpad.Wpf
             var id = Path.GetFileNameWithoutExtension(cmdFile);
             if (id.StartsWith("cmd-")) id = id[4..];
             var resp = "{\"ok\":true}";
+            // Si la ventana esta MINIMIZADA, WebView2 suspende el render: el run no pinta y getoutput
+            // devuelve "" (medido 2026-09-04 con el talud GEO5: 10 min de salida vacia). Restaurarla.
+            try { if (WindowState == WindowState.Minimized) { WindowState = WindowState.Normal; Activate(); } } catch { }
             try
             {
                 using var doc = JsonDocument.Parse(json);
@@ -127,8 +130,10 @@ namespace Calcpad.Wpf
                 switch (op)
                 {
                     case "run":
-                        IsCalculated = true;
-                        CalculateAsync();
+                        // Si el AutoRun ya esta calculando (el guion se abrio con AutoRun activo), NO lanzar
+                        // un segundo calculo encima: se espera al que corre (2026-09-04: con el talud GEO5 el
+                        // doble calculo dejaba el Output vacio 10 min).
+                        if (!_isParsing) { IsCalculated = true; CalculateAsync(); }
                         await CtlWaitCalc();
                         break;
                     case "settext":

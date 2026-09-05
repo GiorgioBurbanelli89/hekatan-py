@@ -3,7 +3,7 @@
 ; Variante Python-only: motor Python nativo en C# + fallback a python real.
 
 #define MyAppName "Hekatan Python3"
-#define MyAppVersion "1.0.19"
+#define MyAppVersion "1.0.20"
 #define MyAppPublisher "Jorge Burbano"
 #define MyAppURL "https://github.com/GiorgioBurbanelli89/Calcpad-Suite-Py"
 #define MyAppExeName "HekatanPython3.exe"
