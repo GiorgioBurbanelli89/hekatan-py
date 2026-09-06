@@ -25,6 +25,10 @@ namespace Calcpad.Core.Python
     public sealed class PyRuntimeError : Exception
     {
         public string PyType;   // "ZeroDivisionError", "TypeError", ...
+        /// <summary>true = el error nace de algo que el motor NATIVO no tiene (np.load, np.savez...). Dentro del
+        /// guion es un AttributeError normal (atrapable con try/except); si llega al pipeline sin atrapar, el
+        /// pipeline lo convierte en PythonNotSupported y el guion entero corre en python real (2026-09-06).</summary>
+        public bool Fallback;
         public PyRuntimeError(string type, string msg) : base(msg) { PyType = type; }
         public PyRuntimeError(string msg) : base(msg) { PyType = "Exception"; }
     }

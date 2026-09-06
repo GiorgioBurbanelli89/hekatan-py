@@ -219,6 +219,11 @@ namespace Calcpad.Core.Python
                     result = _evaluator.ExecuteOne(stmt, _evaluator.Globals);
                 }
                 catch (PythonNotSupported) { throw; } // sube al fallback
+                catch (PyRuntimeError ex) when (ex.Fallback && AllowRealPythonFallback)
+                {
+                    // np.load/np.savez... SIN try/except en el guion: no es error del usuario -> python real.
+                    throw new PythonNotSupported(ex.Message);
+                }
                 catch (PyRuntimeError ex)
                 {
                     FlushDisp(stmtLine);

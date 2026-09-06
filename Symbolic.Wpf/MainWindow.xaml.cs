@@ -266,6 +266,8 @@ namespace Calcpad.Wpf
             var rawTemplate = ReadTextFromFile($"{docPath}\\template{htmlExt}");
             rawTemplate = EmbedScriptInline(rawTemplate, "jquery-3.6.3.min.js", docPath);
             rawTemplate = EmbedScriptInline(rawTemplate, "calcpad-viz.umd.js", docPath);
+            rawTemplate = EmbedScriptInline(rawTemplate, "three-0.145.0.min.js", docPath);   // visor 3D sin internet
+            rawTemplate = EmbedScriptInline(rawTemplate, "OrbitControls-0.145.0.js", docPath);
             // Any remaining calcpad.local references → resolve to local doc URL.
             // (Fixed typo: there used to be an erroneous space "https:// calcpad.local".)
             _htmlWorksheet = rawTemplate.Replace("https://calcpad.local", docUrl);

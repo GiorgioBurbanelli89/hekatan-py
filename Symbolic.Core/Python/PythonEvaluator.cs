@@ -1186,7 +1186,7 @@ namespace Calcpad.Core.Python
                     // (np.load, np.savez, ...) no es un error del usuario, es algo que el motor no tiene
                     // -> PythonNotSupported y el guion entero corre en python real (2026-09-05).
                     if (m.Name == "numpy" || m.Name.StartsWith("numpy.") || m.Name == "scipy" || m.Name.StartsWith("scipy."))
-                        throw new PythonNotSupported($"{m.Name}.{name}");
+                        throw new PyRuntimeError("AttributeError", $"module '{m.Name}' has no attribute '{name}' (no embebido)") { Fallback = true };
                     throw new PyRuntimeError("AttributeError", $"module '{m.Name}' has no attribute '{name}'");
                 case PyInstance inst:
                 {
