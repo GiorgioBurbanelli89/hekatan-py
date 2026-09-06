@@ -123,6 +123,11 @@ namespace Calcpad.Wpf
         private bool _isSaving;
         private bool _isSaved;
         private bool _isParsing;
+        // El pipeline PYTHON sigue corriendo. Hace falta APARTE de _isParsing porque el streaming
+        // navega a la pagina en blanco NADA MAS empezar y ese NavigationCompleted ponia _isParsing=false
+        // a los ~200 ms: la ventana se creia libre y aceptaba OTRO calculo encima (2026-09-05, talud GEO5
+        // por --ctl: las 3 etapas salian DOS veces entrelazadas). Mismo arreglo que _matlabBusy en el Lab.
+        private bool _pyBusy;
         private bool _isPasting;
         private bool _isTextChangedEnabled;
         // Round-trip protection: keep an exact copy of the file text loaded
@@ -1413,7 +1418,7 @@ namespace Calcpad.Wpf
 
         private async void CalculateAsync(bool toWebForm = false)
         {
-            if (_isParsing)
+            if (_isParsing || _pyBusy)
                 return;
             StartupMark("CalculateAsync: enter");
             GetMathSettings();
@@ -1451,6 +1456,7 @@ namespace Calcpad.Wpf
                 StartupMark("Python pure pipeline: start (streaming)");
                 _ctlUltimoMotor = "python";
                 _isParsing = true;
+                _pyBusy = true;
                 FreezeOutputButtons(true);
                 // Construir página de streaming: worksheet header + status banner +
                 // output div + JS helpers + footer. Se navega ANTES de arrancar el
@@ -1586,6 +1592,7 @@ namespace Calcpad.Wpf
                 }
                 catch { /* log secundario */ }
                 _isParsing = false;
+                _pyBusy = false;
                 FreezeOutputButtons(false);
                 IsCalculated = true;
                 _autoRun = false;
@@ -4328,7 +4335,8 @@ namespace Calcpad.Wpf
            if (!await _wv2Warper.CheckIsReportAsync())
                 return;
 
-            _isParsing = false;
+            // La pagina de streaming de Python navega al EMPEZAR; el motor sigue. Manda _pyBusy.
+            if (!_pyBusy) _isParsing = false;
             if (_isSaving)
             {
                 var zip = string.Equals(Path.GetExtension(CurrentFileName), ".cpdz", StringComparison.OrdinalIgnoreCase);

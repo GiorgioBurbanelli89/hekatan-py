@@ -109,7 +109,8 @@ namespace Calcpad.Wpf
 
         private async Task CtlWaitCalc()
         {
-            for (var t = 0; t < 45000 && _isParsing; t++) await Task.Delay(80);   // hasta 1 h: el talud GEO5 tarda 70 s y el tope de 32 s devolvia el run a medias (2026-09-04)
+            for (var t = 0; t < 20 && !(_isParsing || _pyBusy); t++) await Task.Delay(50);   // dar 1 s a que ARRANQUE
+            for (var t = 0; t < 45000 && (_isParsing || _pyBusy); t++) await Task.Delay(80);   // hasta 1 h: el talud GEO5 tarda 70 s y el tope de 32 s devolvia el run a medias (2026-09-04)
             await Task.Delay(700);   // settle del render (graficas)
         }
 
@@ -133,7 +134,7 @@ namespace Calcpad.Wpf
                         // Si el AutoRun ya esta calculando (el guion se abrio con AutoRun activo), NO lanzar
                         // un segundo calculo encima: se espera al que corre (2026-09-04: con el talud GEO5 el
                         // doble calculo dejaba el Output vacio 10 min).
-                        if (!_isParsing) { IsCalculated = true; CalculateAsync(); }
+                        if (!_isParsing && !_pyBusy) { IsCalculated = true; CalculateAsync(); }
                         await CtlWaitCalc();
                         break;
                     case "settext":

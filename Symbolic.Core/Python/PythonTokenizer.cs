@@ -176,7 +176,11 @@ namespace Calcpad.Core.Python
                 {
                     int k = i;
                     while (k < n && src[k] != '\n') k++;
-                    toks.Add(new PyToken { Type = PyTok.Comment, Text = src.Substring(i, k - i), Line = line, Col = Col(i) });
+                    // Dentro de ( [ { el comentario se TRAGA (como CPython): un `# ...` al final de una linea
+                    // de un dict/lista multilinea daba "Expresion inesperada" y el guion caia EN SILENCIO a
+                    // python real (2026-09-05, talud_plot_lib.py importado desde la ventana).
+                    if (parenDepth == 0)
+                        toks.Add(new PyToken { Type = PyTok.Comment, Text = src.Substring(i, k - i), Line = line, Col = Col(i) });
                     i = k;
                     continue;
                 }

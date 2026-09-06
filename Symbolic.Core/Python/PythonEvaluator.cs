@@ -387,6 +387,11 @@ namespace Calcpad.Core.Python
                 return mod;
             }
             catch (PyRuntimeError) { throw; }
+            // Lo que el motor nativo NO traga dentro del modulo (import matplotlib, np.load, sintaxis
+            // no soportada) debe subir como PythonNotSupported para que TODO el guion caiga a python
+            // real; envuelto en ImportError el fallback no se disparaba (2026-09-05, talud_plot_lib).
+            catch (PythonNotSupported) { _localModules.Remove(name); throw; }
+            catch (PythonParseException ex) { _localModules.Remove(name); throw new PythonNotSupported($"modulo local '{name}': {ex.Message}"); }
             catch (Exception ex) { throw new PyRuntimeError("ImportError", $"no se pudo importar '{name}': {ex.Message}"); }
         }
         private PyModule _opsModule;
@@ -1177,6 +1182,11 @@ namespace Calcpad.Core.Python
                     if (m.Attrs.TryGetValue(name, out var mv)) return mv;
                     if (m.Name == "__opensees__")   // módulo OpenSees DINÁMICO: ops.<comando>(*args)
                         return new PyBuiltin(name, (a, kw) => OpsCommand(name, a));
+                    // numpy/scipy EMBEBIDOS son un ESPEJO parcial de la libreria real: lo que falte
+                    // (np.load, np.savez, ...) no es un error del usuario, es algo que el motor no tiene
+                    // -> PythonNotSupported y el guion entero corre en python real (2026-09-05).
+                    if (m.Name == "numpy" || m.Name.StartsWith("numpy.") || m.Name == "scipy" || m.Name.StartsWith("scipy."))
+                        throw new PythonNotSupported($"{m.Name}.{name}");
                     throw new PyRuntimeError("AttributeError", $"module '{m.Name}' has no attribute '{name}'");
                 case PyInstance inst:
                 {
