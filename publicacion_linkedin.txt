@@ -1,17 +1,20 @@
-🚀 Calcpad Suite Py — una hoja de cálculo de ingeniería que corre Python REAL
+🚀 Calcpad Suite Py — una hoja de cálculo de ingeniería que ejecuta Python real
 
 Estoy construyendo una herramienta que une la claridad de un documento de cálculo (tipo Mathcad/Calcpad) con la potencia de Python científico.
 
-👉 Escribes un script normal de Python con numpy y matplotlib, y Calcpad Suite Py lo ejecuta en el Python real del sistema y lo renderiza como un informe: fórmulas, variables y gráficas de matplotlib embebidas — sin exportar nada.
+👉 Escribes un script de Python con numpy y matplotlib, y Calcpad Suite Py lo ejecuta en el Python real del sistema y lo renderiza como un informe: fórmulas, variables y gráficas embebidas — sin exportar nada.
 
 Lo que ya funciona:
 ✅ numpy + matplotlib reales (las librerías que tengas instaladas)
 ✅ Control total de qué se muestra: mostrar u ocultar variables, títulos y texto sin tocar el cálculo
 ✅ Salida línea por línea mientras Python ejecuta
+✅ Gráficas INTERACTIVAS con hover dentro del propio informe (vía plotly): pasas el cursor por el mapa de color y ves el valor justo donde apunta
 
-Lo que viene 🔜 (lo iré agregando a medida que avanzo con mis validaciones):
-🎯 Traer al reporte la INTERACCIÓN que ya logro en los scripts de Python (matplotlib + tkinter): pasar el cursor sobre la malla y ver los valores del nodo (hover), en 2D y 3D, y rotación 3D — como en MATLAB. Hoy esa interacción vive en la ventana de Python; el objetivo es integrarla dentro del propio documento de cálculo.
+Lo que viene 🔜 (lo iré sumando a medida que avanzo con mis validaciones FEM):
+🎯 Inspección de mallas en 3D con hover y rotación dentro del documento — como en MATLAB.
 
-Es un proyecto en evolución: cada validación que hago le suma una capacidad nueva. El objetivo final: que un ingeniero documente, calcule y EXPLORE sus resultados en un solo lugar, con código abierto y reproducible.
+Es un proyecto en evolución y de código abierto. Cada validación que hago le suma una capacidad nueva.
 
-#IngenieríaEstructural #Python #FEM #MEF #numpy #matplotlib #Calcpad #CálculoEstructural #OpenSource #Mathcad #Ingeniería #Estructuras
+🔗 Repositorio: https://github.com/GiorgioBurbanelli89/Calcpad-Suite-Py
+
+#IngenieríaEstructural #Python #FEM #MEF #numpy #matplotlib #plotly #Calcpad #CálculoEstructural #OpenSource #Mathcad #Ingeniería

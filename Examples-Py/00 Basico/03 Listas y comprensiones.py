@@ -1,5 +1,5 @@
 # %% Listas, comprensiones y diccionarios
-# Las listas numéricas se muestran como matrices estilo Calcpad.
+# Las listas numéricas se muestran como matrices estilo Hekatan.
 
 # Lista literal
 cargas = [10, 25, 40, 15, 30]   # cargas por nudo [kN]
@@ -21,7 +21,8 @@ indexadas = [(i, q) for i, q in enumerate(cargas)]
 # Diccionario
 material = {"E": 200000, "fy": 420, "nu": 0.3}
 modulo = material["E"]
-claves = list(material.keys())
+claves = list(material.keys())  # hide
+print(f"claves = {claves}")
 
 # Slicing
 primeros_tres = cargas[:3]

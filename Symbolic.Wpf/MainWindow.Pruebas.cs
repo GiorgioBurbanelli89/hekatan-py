@@ -105,6 +105,21 @@ namespace Calcpad.Wpf
                         if (todo) PlegarTodo_Click(null, null); else DesplegarTodo_Click(null, null);
                         return Ok();
                     }
+                // Autocompletado medible desde la terminal (el popup es otra ventana y no
+                // sale en las capturas): que ofreceria para un prefijo y si el editor que lo
+                // tiene —el PLEGABLE— esta activo.
+                case "complete":
+                    {
+                        var pre = root.TryGetProperty("prefix", out var pp) ? (pp.GetString() ?? "") : "";
+                        var items = PythonLang.Items(pre, null, null, int.MaxValue).ToList();
+                        return System.Text.Json.JsonSerializer.Serialize(new {
+                            ok = true, prefijo = pre,
+                            plegable = EditorPlegableActivo,
+                            total = items.Count,
+                            primeros = items.Take(12).Select(i => i.Text).ToArray(),
+                        });
+                    }
+
                 case "state":
                     return Estado();
 

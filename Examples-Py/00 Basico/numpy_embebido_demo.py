@@ -36,3 +36,10 @@ f_recuperado
 traza
 #' Norma del residuo (debe ser ~0):
 np.linalg.norm(K @ u - f)
+
+# En Python real no hay hoja de calculo: sin print no se ve NADA. El mismo
+# archivo tiene que mostrar los resultados en los dos entornos.
+print("u [mm]          = %.4f  %.4f  %.4f" % (u[0], u[1], u[2]))
+print("K @ u  (= f)    = %.4f  %.4f  %.4f" % (f_recuperado[0], f_recuperado[1], f_recuperado[2]))
+print("traza de K      = %.1f" % traza)
+print("norma residuo   = %.3e" % np.linalg.norm(K @ u - f))

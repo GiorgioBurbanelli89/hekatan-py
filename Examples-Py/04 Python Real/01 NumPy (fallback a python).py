@@ -1,22 +1,25 @@
-# %% NumPy — cae automáticamente al python real del sistema
-# Cuando un script importa librerías no nativas (numpy, scipy, sympy,
-# matplotlib, pandas...), Calcpad Suite Py lo ejecuta con el intérprete
-# `python` instalado y muestra su salida. Requiere: pip install numpy
+# %% NumPy — álgebra lineal con el motor embebido
+# Hekatan Py trae numpy embebido (arrays, matmul, linalg) sin
+# necesidad de un Python externo. Aquí resolvemos un sistema axial de
+# 2 grados de libertad con np.linalg.solve.
 import numpy as np
 
-# Matriz de rigidez de una barra axial (2x2)
+# Dos barras axiales en serie: nudo 0 (fijo) - nudo 1 - nudo 2
 E = 200000.0   # MPa
 A = 2500.0     # mm2
-L = 3000.0     # mm
-k = E * A / L
+L1 = 3000.0    # mm  (barra 0-1)
+L2 = 2000.0    # mm  (barra 1-2)
+k1 = E * A / L1
+k2 = E * A / L2
 
-K = k * np.array([[1, -1],
-                  [-1, 1]])
-print("Matriz de rigidez K [N/mm]:")
-print(K)
+# Matriz de rigidez reducida (GDL libres u1, u2), ensamblada directamente
+Kred = np.array([[k1 + k2, -k2],
+                 [-k2,      k2]])
+print("Matriz de rigidez reducida K [N/mm]:")
+print(Kred)
 
-# Vector de fuerzas y solución (con apoyo en nudo 0)
-F = np.array([50000.0])          # N en nudo libre
-Kred = K[1:, 1:]                 # condensar el GDL fijo
+# Fuerza de 50 kN aplicada en el nudo 2
+F = np.array([0.0, 50000.0])     # N
 u = np.linalg.solve(Kred, F)
-print(f"\nDesplazamiento nudo libre = {u[0]:.4f} mm")
+print(f"\nDesplazamiento nudo 1 = {u[0]:.4f} mm")
+print(f"Desplazamiento nudo 2 = {u[1]:.4f} mm")

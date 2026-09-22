@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 # =============================================================================
 #  MESA A TORSIÓN — explicación paso a paso (FEM 3D validado vs ETABS)
-#  Réplica en Python de  calcpad-draw/mesa_torsion_explicada3D.cpd
-#  para Calcpad Suite Py  (se ejecuta vía el intérprete python real; req. numpy/scipy)
+#  Réplica en Python de  hekatan-draw/mesa_torsion_explicada3D.cpd
+#  para Hekatan Py  (se ejecuta vía el intérprete python real; req. numpy/scipy)
 # =============================================================================
 #  Losa cuadrada apoyada en 4 columnas (una por esquina) con carga uniforme q.
 #  Como solo se apoya en 4 puntos, la losa flexiona Y torsiona → "mesa a torsión".
@@ -16,10 +16,11 @@ except Exception:
     pass
 import numpy as np
 import html as _html
+#noauto   # Suite Py: no volcar las variables (K 240x240, etc.); salida solo via cp_*/print/figuras
 
-# ─── Mini-lib de salida estilo Calcpad ───────────────────────────────────────
-#  Emite HTML con el markup de Calcpad (.eq, var, <table>) vía el marcador
-#  __CPSPY_HTML__ → Calcpad Suite Py lo renderiza como worksheet (NO texto plano).
+# ─── Mini-lib de salida estilo Hekatan ───────────────────────────────────────
+#  Emite HTML con el markup de Hekatan (.eq, var, <table>) vía el marcador
+#  __CPSPY_HTML__ → Hekatan Py lo renderiza como worksheet (NO texto plano).
 def _emit(h):
     print("__CPSPY_HTML__:" + h.replace("\n", " "))
 
@@ -42,15 +43,19 @@ def cp_val(name, value, unit="", fmt="{:.3f}"):
     _emit(f'<p class="line"><span class="eq">{_var(name)} = <b>{v}</b>{u}</span></p>')
 
 def cp_table(headers, rows, title=None, ok_col=None):
-    """Tabla estilo Calcpad. headers=list; rows=list de list (celdas texto/num).
+    """Tabla estilo Hekatan. headers=list; rows=list de list (celdas texto/num).
     ok_col: índice de columna con '✓/~/✗' para colorear (opcional)."""
+    # Deja pasar HTML (var/sub) si la celda CONTIENE una etiqueta; si no, escapa.
+    def _cell(x):
+        s = str(x)
+        return s if ("<" in s and ">" in s) else _html.escape(s)
     th = "".join(f'<th style="text-align:left;padding:3px 12px;border-bottom:2px solid #888">'
-                 f'{_html.escape(str(x))}</th>' for x in headers)
+                 f'{_cell(x)}</th>' for x in headers)
     body = []
     for r in rows:
         tds = []
         for k, c in enumerate(r):
-            txt = c if (isinstance(c, str) and c.startswith("<")) else _html.escape(str(c))
+            txt = c if (isinstance(c, str) and "<" in c and ">" in c) else _html.escape(str(c))
             color = ""
             if ok_col is not None and k == ok_col:
                 color = ("color:#2e7d32" if "✓" in str(c) else
@@ -102,12 +107,12 @@ FICHA = {
     "Convenciones":  "CSI Analysis Reference Manual (ejes locales, offsets, masa lumped)",
     "Material":      "Concreto '4000Psi': E=2'534'564 tonf/m² (24.86 GPa), ν=0.20, γ=2.40277",
     "Modelo fuente": "ETABS 19.1  'Mesa torsiónT.e2k' / 'Mesa torsión_1.e2k' (Seproinca 2020)",
-    "Validación":    "vs ETABS 19.1 (e2k) y vs Calcpad (mesa_torsion_explicada3D.cpd)",
+    "Validación":    "vs ETABS 19.1 (e2k) y vs Hekatan (mesa_torsion_explicada3D.cpd)",
     "Autores form.": "Adini & Clough (1961), Melosh (1963) [placa ACM]; "
                      "Timoshenko [viga]; CSI (2017) [convenciones]",
-    "Réplica de":    "calcpad-draw/mesa_torsion_explicada3D.cpd",
+    "Réplica de":    "hekatan-draw/mesa_torsion_explicada3D.cpd",
 }
-cp_h("MESA A TORSIÓN — FEM 3D  (Calcpad Suite Py)")
+cp_h("MESA A TORSIÓN — FEM 3D  (Hekatan Py)")
 cp_table(["Campo", "Valor"], [[k, v] for k, v in FICHA.items()], title="Ficha del modelo")
 
 cp_h("Datos de la mesa")
@@ -521,9 +526,9 @@ cp_p("<small>Los 3 modos cierran a &lt;0.1% vs ETABS. " +
      _var("M_2") + " columna ≈0% (reporte en cara, una sola K).</small>")
 
 
-# ═══════════════ 12. VISUALIZACIÓN con matplotlib (reemplaza el viewer Calcpad) ═══
+# ═══════════════ 12. VISUALIZACIÓN con matplotlib (reemplaza el viewer Hekatan) ═══
 #  Las figuras se guardan a PNG en memoria, se codifican base64 y se imprimen con el
-#  marcador __CPSPY_IMG__: ; Calcpad Suite Py las embebe como <img> en el reporte.
+#  marcador __CPSPY_IMG__: ; Hekatan Py las embebe como <img> en el reporte.
 cp_h("12. Visualización (matplotlib · colormap jet_r estilo SAP2000)")
 try:
     import matplotlib
@@ -532,13 +537,63 @@ try:
     from matplotlib import cm
     import io, base64
 
+    # ── hover: datatip que sigue al cursor ───────────────────────────────────
+    # En Hekatan Py el motor convierte las figuras en canvas con hover automatico.
+    # En Python real matplotlib NO trae datatip, asi que se agrega aqui: asi el
+    # MISMO .py se comporta igual en los dos lados (que es la idea).
+    # Lee ax._surf3d (superficie 3D) y ax._field (mapa 2D); las lineas van solas.
+    def _hover(fig):
+        from mpl_toolkits.mplot3d import proj3d
+        ann = fig.text(0, 0, "", fontsize=8, visible=False, zorder=30,
+                       bbox=dict(boxstyle="round", fc="#ffffe0", ec="#888", alpha=.95))
+        def mv(e):
+            ax = e.inaxes
+            if ax is None:
+                if ann.get_visible(): ann.set_visible(False); fig.canvas.draw_idle()
+                return
+            s = getattr(ax, "_surf3d", None); f = getattr(ax, "_field", None); t = None
+            if s is not None:                                   # superficie 3D
+                X, Y, Z, W = s
+                x2, y2, _ = proj3d.proj_transform(X.ravel(), Y.ravel(), Z.ravel(), ax.get_proj())
+                p = ax.transData.transform(np.column_stack([x2, y2]))
+                d = (p[:, 0] - e.x)**2 + (p[:, 1] - e.y)**2; k = int(np.argmin(d))
+                if d[k] < 900: t = "x=%.2f y=%.2f\nw=%.4g" % (X.ravel()[k], Y.ravel()[k], W.ravel()[k])
+            elif f is not None and e.xdata is not None:         # mapa de calor 2D
+                X, Y, Z = f
+                i, j = np.unravel_index(int(np.argmin((X - e.xdata)**2 + (Y - e.ydata)**2)), Z.shape)
+                t = "x=%.2f y=%.2f\nvalor=%.4g" % (e.xdata, e.ydata, Z[i, j])
+            elif e.xdata is not None:                           # lineas (interpolacion)
+                best, bd = None, 1e30
+                for ln in ax.get_lines():
+                    xs_ = np.asarray(ln.get_xdata(), float); ys_ = np.asarray(ln.get_ydata(), float)
+                    if xs_.size < 2 or e.xdata < xs_.min() or e.xdata > xs_.max(): continue
+                    yi = float(np.interp(e.xdata, xs_, ys_))
+                    px, py = ax.transData.transform((e.xdata, yi))
+                    if (py - e.y)**2 < bd:
+                        bd = (py - e.y)**2; lab = ln.get_label()
+                        lab = "" if lab.startswith("_") else lab + "\n"
+                        best = "%sx=%.3g\ny=%.4g" % (lab, e.xdata, yi)
+                t = best
+            if t is None:
+                if ann.get_visible(): ann.set_visible(False); fig.canvas.draw_idle()
+                return
+            ann.set_text(t)
+            ann.set_position((e.x / fig.bbox.width + .012, e.y / fig.bbox.height + .012))
+            ann.set_visible(True); fig.canvas.draw_idle()
+        fig.canvas.mpl_connect("motion_notify_event", mv)
+
     def emit_fig(fig, caption=""):
         if caption:
             cp_p("<b>" + _html.escape(caption.strip()) + "</b>")
-        buf = io.BytesIO()
-        fig.savefig(buf, format="png", dpi=110, bbox_inches="tight")
+        _hover(fig)      # datatip que sigue al cursor
+        # El hover necesita que la figura llegue VIVA a su destino:
+        #   Python real (qtagg/tkagg) → plt.show() abre la ventana interactiva.
+        #   Hekatan Py (backend Agg)  → plt.show() se lo entrega al motor, que la
+        #                               convierte en canvas con hover.
+        # Rasterizar aqui con savefig() la volvia una IMAGEN ESTATICA y mataba el
+        # hover; ademas, hacer las dos cosas duplicaba la figura en el reporte.
+        plt.show()
         plt.close(fig)
-        print("__CPSPY_IMG__:" + base64.b64encode(buf.getvalue()).decode("ascii"))
 
     CMAP = "jet_r"   # colormap estilo SAP2000/ETABS (jet invertido)
     xs = np.array([ii*dx for ii in range(6)])
@@ -575,6 +630,7 @@ try:
     cmap = matplotlib.colormaps[CMAP]
     ax.plot_surface(Xf, Yf, Zdef, facecolors=cmap(norm01(Wf)),
                     rstride=1, cstride=1, linewidth=0, antialiased=True, alpha=0.98, shade=False)
+    ax._surf3d = (Xf, Yf, Zdef, Wf)   # hover: muestra la deflexion w del nudo mas cercano
     corners = [(0, 0), (5, 0), (5, 5), (0, 5)]
     bases   = [(0, 0), (6, 0), (6, 6), (0, 6)]
     for e in range(4):
@@ -596,6 +652,7 @@ try:
     for axx, Z, ti in campos:
         Zf = smooth(Z)
         cf = axx.contourf(Xf, Yf, Zf, 40, cmap=CMAP)
+        axx._field = (Xf, Yf, Zf)     # hover: valor del campo bajo el cursor
         axx.set_title(ti); axx.set_aspect("equal")
         axx.set_xlabel("X [m]"); axx.set_ylabel("Y [m]")
         fig.colorbar(cf, ax=axx, shrink=0.85)

@@ -76,6 +76,44 @@ namespace Calcpad.Wpf
             return true;
         }
 
+        /// <summary>Comentar / descomentar las lineas SELECCIONADAS con <c>#</c>, en el editor
+        /// plegable. Devuelve false si no esta activo (entonces sigue el camino clasico).
+        ///
+        /// El de Calcpad comentaba con <c>'</c>, que en Python es una comilla: dejaba el archivo
+        /// roto. Aqui se usa <c>#</c> y se respeta la SANGRIA (el <c>#</c> va donde empieza el
+        /// codigo, no pegado al margen), que es como lo hace cualquier editor de Python.</summary>
+        private bool ComentarEnAvalon(bool comentar)
+        {
+            if (!EditorPlegableActivo || !_avalonListo || AvalonEditor is null) return false;
+
+            var doc = AvalonEditor.Document;
+            var primera = doc.GetLineByOffset(AvalonEditor.SelectionStart);
+            var ultima = doc.GetLineByOffset(AvalonEditor.SelectionStart + AvalonEditor.SelectionLength);
+
+            using (doc.RunUpdate())
+            {
+                for (var l = primera; l is not null && l.LineNumber <= ultima.LineNumber; l = l.NextLine)
+                {
+                    var texto = doc.GetText(l);
+                    var sangria = texto.Length - texto.TrimStart().Length;
+                    if (comentar)
+                    {
+                        if (texto.Trim().Length == 0) continue;          // las vacias no se comentan
+                        if (texto.TrimStart().StartsWith('#')) continue;  // ya estaba
+                        doc.Insert(l.Offset + sangria, "# ");
+                    }
+                    else
+                    {
+                        if (!texto.TrimStart().StartsWith('#')) continue;
+                        var quitar = texto.Length > sangria + 1 && texto[sangria + 1] == ' ' ? 2 : 1;
+                        doc.Remove(l.Offset + sangria, quitar);
+                    }
+                }
+            }
+            AvalonEditor.Focus();
+            return true;
+        }
+
         // ---------- marcado en linea (negrita, cursiva, sub/superindice, colores) ----------
 
         private void MarcarSeleccion(string t1, string t2)

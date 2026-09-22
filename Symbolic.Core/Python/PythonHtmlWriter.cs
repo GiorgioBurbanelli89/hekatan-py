@@ -280,6 +280,19 @@ namespace Calcpad.Core.Python
                 }
                 if (all2d)
                 {
+                    // rectangular: se pinta truncada y ARRASTRABLE; irregular: como antes, completa
+                    int nc0 = rows[0].Count;
+                    bool rect = rows.TrueForAll(r => r.Count == nc0);
+                    if (rect)
+                    {
+                        var celdas = new string[rows.Count][];
+                        for (int i = 0; i < rows.Count; i++)
+                        {
+                            celdas[i] = new string[nc0];
+                            for (int j = 0; j < nc0; j++) celdas[i][j] = WebUtility.HtmlEncode(PyOps.Str(rows[i][j]));
+                        }
+                        return HkMatriz(celdas);
+                    }
                     var sbm = new StringBuilder();
                     ClassicMatrixOpen(sbm);
                     foreach (var row in rows)
@@ -316,27 +329,99 @@ namespace Calcpad.Core.Python
         // celda vacía primera/última) — mismo estilo AJUSTADO que Calcpad Suite/VM/Symbolic.
         private static void ClassicMatrixOpen(StringBuilder sb) => sb.Append("<span class=\"matrix\">");
 
+        // ── Matriz TRUNCADA y ARRASTRABLE ────────────────────────────────────────────────
+        // Dibuja 6×6 y deja una manija abajo-derecha: al arrastrarla el JS de la plantilla
+        // vuelve a dibujar con más filas/columnas, porque el HTML lleva TODAS las celdas en
+        // data-hk-cells. Mismo criterio que Hekatan Lab (MatlabHtmlWriter) y que la web.
+        private const int HkVis = 6;          // cuántas filas/columnas se ven al principio
+        private const int HkMaxCeldas = 4000; // por encima no se serializa (queda solo truncada)
+
+        private static string HkMatriz(string[][] celdas)
+        {
+            int nr = celdas.Length, nc = nr == 0 ? 0 : celdas[0].Length;
+            if (nr == 0 || nc == 0) return "[]";
+            bool truncR = nr > HkVis, truncC = nc > HkVis;
+            int showR = truncR ? HkVis : nr, showC = truncC ? HkVis : nc;
+
+            string attrs = "";
+            if ((truncR || truncC) && (long)nr * nc <= HkMaxCeldas)
+                attrs = $" data-hk-r=\"{nr}\" data-hk-c=\"{nc}\""
+                      + $" data-vis-rows=\"{showR}\" data-vis-cols=\"{showC}\""
+                      + $" data-hk-cells='{HkJson(celdas)}'";
+
+            var sb = new StringBuilder();
+            sb.Append("<span class=\"matrix\"").Append(attrs).Append('>');
+            for (int i = 0; i < showR; i++)
+            {
+                int ri = (truncR && i == showR - 1) ? nr - 1 : i;
+                sb.Append("<span class=\"tr\"><span class=\"td\"></span>");
+                for (int j = 0; j < showC; j++)
+                {
+                    int cj = (truncC && j == showC - 1) ? nc - 1 : j;
+                    string txt;
+                    if (truncR && i == showR - 1 && truncC && j == showC - 2) txt = "⋱";
+                    else if (truncC && j == showC - 2) txt = "⋯";
+                    else if (truncR && i == showR - 2) txt = "⋮";
+                    else txt = celdas[ri][cj];
+                    sb.Append("<span class=\"td\">").Append(txt).Append("</span>");
+                }
+                sb.Append("<span class=\"td\"></span></span>");
+            }
+            if (attrs.Length > 0)
+                sb.Append("<span class=\"mat-grip\" title=\"Arrastrar para ver mas o menos celdas\"></span>");
+            sb.Append("</span>");
+            if (truncR || truncC)
+                sb.Append($"<span style=\"font:italic 11px sans-serif;color:#888;margin-left:.5em\">[{nr}×{nc}]</span>");
+            return sb.ToString();
+        }
+
+        private static string HkJson(string[][] celdas)
+        {
+            var sb = new StringBuilder("[");
+            for (int i = 0; i < celdas.Length; i++)
+            {
+                if (i > 0) sb.Append(',');
+                sb.Append('[');
+                for (int j = 0; j < celdas[i].Length; j++)
+                {
+                    if (j > 0) sb.Append(',');
+                    sb.Append('"');
+                    foreach (char ch in celdas[i][j])
+                    {
+                        if (ch == '"') sb.Append("\\\"");
+                        else if (ch == '\\') sb.Append("\\\\");
+                        else if (ch == '<') sb.Append("\\u003c");
+                        else if (ch == '>') sb.Append("\\u003e");
+                        else if (ch == '&') sb.Append("\\u0026");
+                        else if (ch == '\'') sb.Append("\\u0027");
+                        else if (ch < ' ') sb.Append("\\u").Append(((int)ch).ToString("x4"));
+                        else sb.Append(ch);
+                    }
+                    sb.Append('"');
+                }
+                sb.Append(']');
+            }
+            return sb.Append(']').ToString();
+        }
+
         // numpy.ndarray → matriz .eq (con truncado: matrices grandes muestran solo el shape).
         private static string NdToHtml(PyNdArray a)
         {
-            const int MAXR = 16, MAXC = 16;
-            if (a.Size > 400 || a.Rows > MAXR || a.Cols > MAXC)
+            int rows = a.Ndim == 1 ? 1 : a.Rows, cols = a.Ndim == 1 ? a.Size : a.Cols;
+            // Antes: por encima de 400 elementos NO se dibujaba nada, solo el shape. Ahora se
+            // dibuja truncada y ARRASTRABLE; el shape solo queda para las verdaderamente enormes.
+            if ((long)rows * cols > HkMaxCeldas || a.Ndim > 2)
                 return WebUtility.HtmlEncode($"array(shape=({string.Join("×", a.Shape)}), dtype={(a.IsInt ? "int64" : "float64")})");
             string Cell(double v) => WebUtility.HtmlEncode(a.IsInt
                 ? ((long)System.Math.Round(v)).ToString(System.Globalization.CultureInfo.InvariantCulture)
                 : PyOps.Str(v));
-            var sb = new StringBuilder();
-            ClassicMatrixOpen(sb);
-            int rows = a.Ndim == 1 ? 1 : a.Rows, cols = a.Ndim == 1 ? a.Size : a.Cols;
+            var celdas = new string[rows][];
             for (int i = 0; i < rows; i++)
             {
-                sb.Append("<span class=\"tr\"><span class=\"td\"></span>");
-                for (int j = 0; j < cols; j++)
-                    sb.Append("<span class=\"td\">").Append(Cell(a.Data[i * cols + j])).Append("</span>");
-                sb.Append("<span class=\"td\"></span></span>");
+                celdas[i] = new string[cols];
+                for (int j = 0; j < cols; j++) celdas[i][j] = Cell(a.Data[i * cols + j]);
             }
-            sb.Append("</span>");
-            return sb.ToString();
+            return HkMatriz(celdas);
         }
 
         private static string DictToHtml(PyDict d)

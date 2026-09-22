@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-#" Demo de HOVER interactivo — igual en Python real y en Calcpad Suite Py
+#" Demo de HOVER interactivo — igual en Python real y en Hekatan Py
 #' Tres gráficas básicas: líneas, mapa de calor 2D y superficie 3D.
 #' En Suite Py el motor las convierte en canvas interactivos con hover (automático).
 #' En Python real, el helper _hover() agrega el datatip que sigue al cursor.
@@ -47,7 +47,7 @@ def _hover(fig):
 
 
 #" 1) Líneas — y = sin(x), cos(x)
-x = np.linspace(0, 10, 40)
+x, _h = np.linspace(0, 10, 40), 0     # tuple-unpack: no vuelca el vector largo
 f1, a1 = plt.subplots(figsize=(6, 3.5))
 a1.plot(x, np.sin(x), marker='o', ms=3, label='sin(x)')
 a1.plot(x, np.cos(x), marker='o', ms=3, label='cos(x)')
@@ -55,7 +55,7 @@ a1.set_title('Lineas'); a1.set_xlabel('x'); a1.legend(); a1.grid(alpha=.3)
 _hover(f1); plt.show()
 
 #" 2) Mapa de calor 2D — z = sin(x)·cos(y)
-xs = np.linspace(0, 6, 60); ys = np.linspace(0, 6, 60)
+xs, _h = np.linspace(0, 6, 60), 0; ys, _h = np.linspace(0, 6, 60), 0   # no vuelca vectores largos
 X, Y = np.meshgrid(xs, ys, indexing='ij'); Z = np.sin(X) * np.cos(Y)
 f2, a2 = plt.subplots(figsize=(5, 4))
 a2.contourf(X, Y, Z, 40, cmap='jet_r'); a2._field = (X, Y, Z)
@@ -64,8 +64,8 @@ _hover(f2); plt.show()
 
 #" 3) Superficie 3D — z = exp(-(x²+y²))
 X2, Y2 = np.meshgrid(np.linspace(-2, 2, 45), np.linspace(-2, 2, 45), indexing='ij')
-Z2 = np.exp(-(X2**2 + Y2**2))
-f3 = plt.figure(figsize=(6, 5)); a3 = f3.add_subplot(111, projection='3d')
+Z2, _h = np.exp(-(X2**2 + Y2**2)), 0   # tuple-unpack: no vuelca la matriz
+f3, _h = plt.figure(figsize=(6, 5)), 0; a3 = f3.add_subplot(111, projection='3d')   # no vuelca el handle
 a3.plot_surface(X2, Y2, Z2, cmap='jet_r'); a3._surf3d = (X2, Y2, Z2, Z2)
 a3.set_title('Superficie 3D'); a3.set_xlabel('x'); a3.set_ylabel('y')
 _hover(f3); plt.show()

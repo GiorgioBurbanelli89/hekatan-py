@@ -14,7 +14,8 @@ print(f"notación científica: {fc*1e6:.3e} Pa")
 # Métodos de string
 codigo = "  viga-V12  "
 limpio = codigo.strip().upper()
-partes = "L1,L2,L3,L4".split(",")
+partes = "L1,L2,L3,L4".split(",")  # hide
+print(f"partes = {partes}")
 unido = " + ".join(partes)
 
 # Operador % (printf-style)
