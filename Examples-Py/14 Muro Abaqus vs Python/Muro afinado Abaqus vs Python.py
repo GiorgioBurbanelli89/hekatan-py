@@ -67,7 +67,26 @@ free=np.array([i for i in range(ng) if i not in fix])
 cp_h("2. Malla")
 cp_val("elementos", NE, "Q4", "{:.0f}"); cp_val("nudos", NN, "", "{:.0f}"); cp_val("GDL", ng, "", "{:.0f}")
 
-# ─── 3. Solución incremental con daño ────────────────────────────────────────
+# ─── 3. Solución incremental con daño (la grieta se dibuja EN VIVO) ──────────
+#  Cada paso imprime una figura dentro de <div class="hkvivo">; el <script> de ese
+#  mismo bloque borra los cuadros anteriores -> se ve UNA figura que se actualiza.
+import matplotlib; matplotlib.use("Agg")
+import matplotlib.pyplot as plt, io, base64
+from matplotlib.collections import PolyCollection
+def cuadro(st, ux):
+    fig,ax=plt.subplots(figsize=(8.5,5.2))
+    Xd=XY+74*np.column_stack([U[0::2],U[1::2]])                 # deformada x74
+    pc=PolyCollection([Xd[e] for e in els],array=dv,cmap="jet",edgecolors=(0.7,0.7,0.7),linewidths=0.1)
+    pc.set_clim(0,0.9); ax.add_collection(pc); fig.colorbar(pc,ax=ax,shrink=0.85)
+    ax.plot([0,W,W,0,0],[0,0,Hh,Hh,0],color="0.35",lw=1.2)
+    ax.set_xlim(-100,W+400); ax.set_ylim(-100,Hh+100); ax.set_aspect("equal")
+    ax.set_title("Grieta del muro - paso %d/%d   u$_x$=%.2f mm   d$_{max}$=%.3f   agrietados=%d"
+                 %(st,nstep,ux,dv.max(),int((dv>0.5).sum())),fontsize=11)
+    b=io.BytesIO(); fig.savefig(b,format="png",dpi=80); plt.close(fig)
+    _emit('<div class="hkvivo" style="text-align:center"><img style="max-width:100%" src="data:image/png;base64,'
+          + base64.b64encode(b.getvalue()).decode() + '"/></div>'
+          '<script>(function(){var f=document.querySelectorAll(".hkvivo");'
+          'for(var i=0;i<f.length-1;i++)f[i].remove();})();</script>')
 curva_x=[0,0.0006,0.002,0.006]; curva_s=[2.6,0.5,0.1,0.05]     # ablandamiento a tracción
 dv=np.zeros(NE); epl=np.zeros((NE,3)); epq=np.zeros(NE); U=np.zeros(ng); dts=1.0/nstep
 for st in range(1,nstep+1):
@@ -91,6 +110,7 @@ for st in range(1,nstep+1):
             db=min(0.95, 0.0 if epq[e]<=0 else 1-(np.interp(epq[e],curva_x,curva_s) if epq[e]<0.006 else 0.05)/ft)
             dv[e]=(dv[e]+(dts/visc)*db)/(1+dts/visc)
         if np.max(np.abs(dv-dold))<3e-3: break
+    cuadro(st, ux)                                              # cuadro vivo del paso
 cp_h("3. Resultado Python")
 cp_val("d_max", dv.max(), "", "{:.3f}")
 cp_val("elementos con d > 0.5", int((dv>0.5).sum()), "", "{:.0f}")
@@ -107,9 +127,6 @@ cp_h("4. Abaqus vs Python")
 cp_p("error medio = (1/n)·Σ|d<sub>Py</sub> − d<sub>Abq</sub>| ,  corr = correlación de Pearson celda a celda")
 cp_val("error_medio", 100*err, "%", "{:.1f}"); cp_val("corr", corr, "", "{:.2f}")
 
-import matplotlib; matplotlib.use("Agg")
-import matplotlib.pyplot as plt, io, base64
-from matplotlib.collections import PolyCollection
 polys=[XY[e] for e in els]
 fig,axs=plt.subplots(1,2,figsize=(16,5.6))
 for ax,(dat,ttl) in zip(axs,[(ab,"ABAQUS (DAMAGET)"),(dv,"PYTHON afinado (visc baja)")]):
