@@ -56,6 +56,15 @@ namespace Calcpad.Wpf
             AvalonEditor.TextChanged += AvalonEditor_TextChanged;
             AvalonEditor.TextArea.TextEntered += AvalonEditor_TextEntered;
             AvalonEditor.PreviewKeyDown += AvalonEditor_PreviewKeyDown;
+            // Ctrl + rueda = zoom del codigo (lo hacia RichTextBox_PreviewMouseWheel, que con
+            // el editor plegable delante ya no llega; el Output si lo tenia: WebView2).
+            // Mismo arreglo que Hekatan Lab (6dc944d).
+            AvalonEditor.PreviewMouseWheel += (_, e) =>
+            {
+                if (!IsControlDown) return;
+                e.Handled = true;
+                ZoomEditor(Math.Sign(e.Delta));
+            };
 
             AplicarModoEditor();
             SincronizarHaciaAvalon();
@@ -297,6 +306,51 @@ namespace Calcpad.Wpf
             finally { _desdeAvalon = false; }
             ActualizarPlegado();
             ActualizarSemantica();
+            ProgramarAutoRunAvalon();
+        }
+
+        /// <summary>Zoom del codigo: +2 / −2 puntos, entre 6 y 40 (mismos pasos y topes que el
+        /// editor clasico, ver RichTextBox_PreviewMouseWheel). Se aplica a los dos editores para
+        /// que al alternar «Plegado» no cambie el tamaño. Devuelve el tamaño resultante.
+        /// Mismo arreglo que Hekatan Lab (6dc944d).</summary>
+        private double ZoomEditor(int sentido)
+        {
+            var d = AvalonEditor.FontSize + 2 * sentido;
+            if (d > 4 && d < 42)
+            {
+                AvalonEditor.FontSize = d;
+                RichTextBox.FontSize = d;
+                DispatchLineNumbers();
+            }
+            return AvalonEditor.FontSize;
+        }
+
+        // ---------- AutoRun al escribir ----------
+        // El AutoRun clasico lo disparaba el RichTextBox al CAMBIAR DE LINEA
+        // (RichTextBox_SelectionChanged) o al PERDER EL FOCO. Con AvalonEdit delante, el
+        // RichTextBox oculto nunca recibe cursor ni foco: _autoRun quedaba en true y nadie
+        // calculaba (se escribia y el Output se quedaba quieto).
+        // Ahora, como Hekatan Lab (15e366f): 700 ms despues de la ultima tecla, se calcula.
+        private System.Windows.Threading.DispatcherTimer _autoRunAvalonTimer;
+
+        private void ProgramarAutoRunAvalon()
+        {
+            if (!IsAutoRun) return;
+            if (_autoRunAvalonTimer is null)
+            {
+                _autoRunAvalonTimer = new System.Windows.Threading.DispatcherTimer
+                { Interval = TimeSpan.FromMilliseconds(700) };
+                _autoRunAvalonTimer.Tick += async (_, _) =>
+                {
+                    _autoRunAvalonTimer.Stop();
+                    if (!IsAutoRun || !EditorPlegableActivo) return;
+                    _autoRun = false;
+                    _renderSinParpadeo = true;   // swap atómico: sin página en blanco intermedia
+                    await AutoRun();
+                };
+            }
+            _autoRunAvalonTimer.Stop();      // cada tecla reinicia la cuenta
+            _autoRunAvalonTimer.Start();
         }
 
         /// <summary>RichTextBox -> AvalonEdit. Se llama al abrir archivo, al limpiar, y tras

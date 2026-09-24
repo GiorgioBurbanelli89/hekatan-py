@@ -128,6 +128,11 @@ namespace Calcpad.Wpf
         // a los ~200 ms: la ventana se creia libre y aceptaba OTRO calculo encima (2026-09-05, talud GEO5
         // por --ctl: las 3 etapas salian DOS veces entrelazadas). Mismo arreglo que _matlabBusy en el Lab.
         private bool _pyBusy;
+        // El proximo calculo viene del AutoRun al escribir (temporizador de 700 ms de
+        // MainWindow.Avalon.cs) → swap atómico del Output sin re-navegar a la pagina en
+        // blanco de streaming (evita el parpadeo en cada pausa al escribir). Mismo arreglo
+        // que Hekatan Lab (0460da8, __matlabSwap).
+        private bool _renderSinParpadeo;
         private bool _isPasting;
         private bool _isTextChangedEnabled;
         // Round-trip protection: keep an exact copy of the file text loaded
@@ -1447,6 +1452,12 @@ namespace Calcpad.Wpf
             // y archivos .py usan el motor Python nativo (con fallback a python real).
             bool isPyFile = string.IsNullOrEmpty(CurrentFileName) ||
                 CurrentFileName.EndsWith(".py", StringComparison.OrdinalIgnoreCase);
+            // SIN PARPADEO: el AutoRun al escribir NO re-navega a la página de streaming
+            // (1.er destello: página vacía + banner) para luego pintar (2.º): deja el resultado
+            // anterior a la vista y hace UN swap atómico al final (__matlabSwap). Mismo arreglo
+            // que Hekatan Lab (0460da8).
+            bool swapRender = _renderSinParpadeo;
+            _renderSinParpadeo = false;
             string htmlResult;
             // ── PURE MATLAB pipeline para archivos .m: usar motor MATLAB nativo,
             //    no MatlabPreprocessor (que rompe sintaxis tic, transpose, slicing).
@@ -1466,7 +1477,25 @@ namespace Calcpad.Wpf
                 var streamingPage = BuildStreamingPage();
                 try
                 {
-                    await _wv2Warper.NavigateToStringAsync(streamingPage);
+                    if (swapRender)
+                    {
+                        // AutoRun al escribir → NO re-navegar NI limpiar todavía. Se mantiene
+                        // el contenido viejo visible y al final se hace UN swap atómico
+                        // (__matlabSwap). Si la página aún no existe (primer cálculo), cae a
+                        // navegar normal.
+                        string ok = "0";
+                        try { ok = await WebViewer.ExecuteScriptAsync("(document.getElementById('matlab-output')?1:0)"); }
+                        catch { }
+                        if (ok != "1")
+                        {
+                            swapRender = false;   // página no lista → streamear normal
+                            await _wv2Warper.NavigateToStringAsync(streamingPage);
+                        }
+                    }
+                    else
+                    {
+                        await _wv2Warper.NavigateToStringAsync(streamingPage);
+                    }
                 }
                 catch
                 {
@@ -1516,6 +1545,7 @@ namespace Calcpad.Wpf
                     pipeline.StatementStarting += line =>
                         Dispatcher.InvokeAsync(async () =>
                         {
+                            if (swapRender) return;   // AutoRun al escribir: sin banner "Calculando…" (evita el destello)
                             try {
                                 var elapsed = (DateTime.UtcNow - parseStart).TotalSeconds;
                                 string preview = "";
@@ -1536,6 +1566,7 @@ namespace Calcpad.Wpf
                     pipeline.StatementCompleted += (line, html) =>
                         Dispatcher.InvokeAsync(async () =>
                         {
+                            if (swapRender) return;   // AutoRun al escribir: sin streaming por statement; swap único al final
                             try
                             {
                                 var escaped = System.Text.Json.JsonSerializer.Serialize(html);
@@ -1564,7 +1595,7 @@ namespace Calcpad.Wpf
                 // Limpiar el banner "Calculando..." y mostrar errores top-level si hay
                 try
                 {
-                    if (pureErr != null)
+                    if (pureErr != null && !swapRender)
                     {
                         var errHtml = $"<p class=\"err\">Error on line {pureErrLine}: " +
                             $"{System.Net.WebUtility.HtmlEncode(pureErr)}</p>";
@@ -1576,6 +1607,22 @@ namespace Calcpad.Wpf
                         "window.__matlabClearStatus && window.__matlabClearStatus();");
                 }
                 catch { /* WebView2 cerrándose */ }
+                // AutoRun al escribir: UN swap atómico del #matlab-output (no se streameó por
+                // statement ni se limpió antes). Construye el HTML nuevo y reemplaza el
+                // contenido en una sola operación → sin parpadeo ni banner.
+                if (swapRender)
+                {
+                    try
+                    {
+                        // con error: lo calculado hasta ahi + el error, en el MISMO swap
+                        // (appendear sobre el viejo lo duplicaria)
+                        var swapHtml = (pureHtml ?? "") + (pureErr == null ? "" :
+                            $"<p class=\"err\">Error on line {pureErrLine}: {System.Net.WebUtility.HtmlEncode(pureErr)}</p>");
+                        var escSwap = System.Text.Json.JsonSerializer.Serialize(swapHtml);
+                        await WebViewer.ExecuteScriptAsync($"window.__matlabSwap && window.__matlabSwap({escSwap});");
+                    }
+                    catch { }
+                }
                 // Persistir HTML final a log + sidecar (mismo comportamiento que antes)
                 htmlResult = pureErr != null
                     ? HtmlApplyWorksheet($"<p class=\"err\">Error on line {pureErrLine}: " +
@@ -1984,6 +2031,23 @@ namespace Calcpad.Wpf
     }
     window.__matlabClearStatus = function(){
       if (status) status.style.display = 'none';
+    };
+    // AutoRun al escribir: reemplaza TODO el #matlab-output en UNA operación (clear+fill en
+    // la misma ejecución JS → el browser repinta una sola vez, sin blanco intermedio). Re-crea
+    // los <script> para que Plotly/etc se ejecuten. Mismo patrón que Hekatan Lab (0460da8).
+    window.__matlabSwap = function(html){
+      if (!output) return;
+      var tmp = document.createElement('div');
+      tmp.innerHTML = html;
+      tmp.querySelectorAll('script').forEach(function(oldScript){
+        var s = document.createElement('script');
+        for (var i=0;i<oldScript.attributes.length;i++) s.setAttribute(oldScript.attributes[i].name, oldScript.attributes[i].value);
+        s.textContent = oldScript.textContent;
+        oldScript.parentNode.replaceChild(s, oldScript);
+      });
+      window.__matlabBindLineLinks && window.__matlabBindLineLinks();
+      output.innerHTML = '';
+      while (tmp.firstChild) output.appendChild(tmp.firstChild);
     };
   })();
 </script>
@@ -3066,7 +3130,10 @@ namespace Calcpad.Wpf
                     if (p is not null)
                     {
                         var len = p.ContentStart.GetOffsetToPosition(p.ContentEnd);
-                        if (IsCalculated && len > 2 && !_highlighter.Defined.HasMacros)
+                        // Con AvalonEdit NO: el GIF «escribiendo» iba a la línea del cursor del
+                        // RichTextBox OCULTO (otra línea, el oculto no sigue al cursor real) y
+                        // era un destello más en cada tecla. Mismo arreglo que Lab (0460da8).
+                        if (IsCalculated && len > 2 && !_highlighter.Defined.HasMacros && !vinoDeAvalon)
                             _wv2Warper.SetContentAsync(_currentLineNumber, _svgTyping);
                     }
                     _autoRun = true;

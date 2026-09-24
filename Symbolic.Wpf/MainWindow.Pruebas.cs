@@ -41,6 +41,9 @@ namespace Calcpad.Wpf
     /// </summary>
     public partial class MainWindow
     {
+        private int _ctlNavs;                 // navegaciones del WebView2 (op «navs»)
+        private bool _ctlNavsEnganchado;
+
         /// <summary>Operaciones de prueba del editor. Devuelve null si la op no es de aqui
         /// (entonces el canal contesta "op desconocida" como siempre).</summary>
         private string CtlEditorOp(string op, JsonElement root)
@@ -122,6 +125,41 @@ namespace Calcpad.Wpf
 
                 case "state":
                     return Estado();
+
+                // Anchos del reparto Codigo | divisor | Output, y DONDE esta el divisor en
+                // pantalla (px fisicos) para arrastrarlo con el raton de verdad.
+                case "layout":
+                    {
+                        var inv = System.Globalization.CultureInfo.InvariantCulture;
+                        var p0 = MainSplitter.PointToScreen(new Point(0, 0));
+                        var p1 = MainSplitter.PointToScreen(new Point(MainSplitter.ActualWidth, MainSplitter.ActualHeight));
+                        return string.Format(inv,
+                            "{{\"ok\":true,\"editor\":{0},\"splitter\":{1},\"web\":{2},\"sx0\":{3},\"sy0\":{4},\"sx1\":{5},\"sy1\":{6}}}",
+                            EditorCol.ActualWidth, MainSplitter.ActualWidth, WebCol.ActualWidth,
+                            (int)p0.X, (int)p0.Y, (int)p1.X, (int)p1.Y);
+                    }
+
+                // Zoom del codigo como Ctrl+rueda: {"op":"zoom","steps":+1|-1} -> tamaño de letra
+                case "zoom":
+                    {
+                        var pasos = root.TryGetProperty("steps", out var sp) ? sp.GetInt32() : 1;
+                        double fs = AvalonEditor.FontSize;
+                        for (int k = 0; k < Math.Abs(pasos); k++) fs = ZoomEditor(Math.Sign(pasos));
+                        return "{\"ok\":true,\"fontSize\":" + fs.ToString(System.Globalization.CultureInfo.InvariantCulture) + "}";
+                    }
+
+                // Parpadeo del Output: cuantas veces NAVEGO el WebView2 (cada navegacion = pagina
+                // en blanco un instante). {"op":"navs","reset":true} pone a 0 y empieza a contar.
+                case "navs":
+                    {
+                        if (!_ctlNavsEnganchado)
+                        {
+                            _ctlNavsEnganchado = true;
+                            WebViewer.CoreWebView2.NavigationStarting += (_, _) => _ctlNavs++;
+                        }
+                        if (root.TryGetProperty("reset", out var rs) && rs.GetBoolean()) _ctlNavs = 0;
+                        return "{\"ok\":true,\"navs\":" + _ctlNavs + "}";
+                    }
 
                 default:
                     return null;
